@@ -1476,36 +1476,19 @@ export function MatchDetailModal({
                           </div>
                         </div>
 
-                        {/* 3. Cơ hội lớn tạo ra */}
+                        {/* 3. Pha cứu thua */}
                         <div className="flex items-center justify-between py-2 sm:py-2.5">
                           <div className="w-14 sm:w-16 flex justify-start">
-                            <span className={cn("text-xs sm:text-sm font-black px-2.5 py-0.5 rounded-full", (match.stats.bigChancesHome ?? 0) > (match.stats.bigChancesAway ?? 0) ? "bg-red-600 text-white" : "text-foreground")}>
-                              {match.stats.bigChancesHome ?? 0}
+                            <span className={cn("text-xs sm:text-sm font-black px-2.5 py-0.5 rounded-full", match.stats.savesHome > match.stats.savesAway ? "bg-red-600 text-white" : "text-foreground")}>
+                              {match.stats.savesHome}
                             </span>
                           </div>
                           <span className="text-xs sm:text-sm font-semibold text-muted-foreground text-center flex-1">
-                            Cơ hội lớn tạo ra
+                            Pha cứu thua
                           </span>
                           <div className="w-14 sm:w-16 flex justify-end">
-                            <span className={cn("text-xs sm:text-sm font-black px-2.5 py-0.5 rounded-full", (match.stats.bigChancesAway ?? 0) > (match.stats.bigChancesHome ?? 0) ? "bg-blue-600 text-white" : "text-foreground")}>
-                              {match.stats.bigChancesAway ?? 0}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 4. Cơ hội lớn bỏ lỡ */}
-                        <div className="flex items-center justify-between py-2 sm:py-2.5">
-                          <div className="w-14 sm:w-16 flex justify-start">
-                            <span className={cn("text-xs sm:text-sm font-black px-2.5 py-0.5 rounded-full", (match.stats.bigChancesMissedHome ?? 0) > (match.stats.bigChancesMissedAway ?? 0) ? "bg-red-600 text-white" : "text-foreground")}>
-                              {match.stats.bigChancesMissedHome ?? 0}
-                            </span>
-                          </div>
-                          <span className="text-xs sm:text-sm font-semibold text-muted-foreground text-center flex-1">
-                            Cơ hội lớn bỏ lỡ
-                          </span>
-                          <div className="w-14 sm:w-16 flex justify-end">
-                            <span className={cn("text-xs sm:text-sm font-black px-2.5 py-0.5 rounded-full", (match.stats.bigChancesMissedAway ?? 0) > (match.stats.bigChancesMissedHome ?? 0) ? "bg-blue-600 text-white" : "text-foreground")}>
-                              {match.stats.bigChancesMissedAway ?? 0}
+                            <span className={cn("text-xs sm:text-sm font-black px-2.5 py-0.5 rounded-full", match.stats.savesAway > match.stats.savesHome ? "bg-blue-600 text-white" : "text-foreground")}>
+                              {match.stats.savesAway}
                             </span>
                           </div>
                         </div>

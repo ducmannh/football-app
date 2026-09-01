@@ -13,6 +13,11 @@ export const metadata: Metadata = {
   title: "Football Hub | Lịch thi đấu, Tỉ số trực tiếp 8 Giải Châu Âu",
   description:
     "Hệ thống cập nhật lịch thi đấu, kết quả và tỉ số trực tiếp 5 giải VĐQG hàng đầu và 3 Cúp Châu Âu (Champions League, Europa League, Conference League).",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

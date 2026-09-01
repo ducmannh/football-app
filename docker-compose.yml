@@ -10,6 +10,8 @@ services:
     restart: always
     ports:
       - "2305:2305"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     environment:

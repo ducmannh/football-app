@@ -7,6 +7,6 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env.DATABASE_URL,
+    url: process.env.DATABASE_URL || "postgresql://postgres:123456@postgres:5432/my_football_db?schema=public",
   },
 });

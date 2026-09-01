@@ -1,5 +1,25 @@
 services:
-  # Database PostgreSQL
+  # 1. Ứng dụng Next.js Football App
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - DATABASE_URL=${DATABASE_URL}
+    container_name: football_app
+    restart: always
+    ports:
+      - "2305:2305"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-123456}@postgres:5432/${POSTGRES_DB:-my_football_db}?schema=public}
+      - PORT=2305
+      - NODE_ENV=production
+    depends_on:
+      - postgres
+
+  # 2. Database PostgreSQL
   postgres:
     image: postgres:16-alpine
     container_name: football_db

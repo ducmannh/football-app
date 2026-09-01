@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+.gitignore
+.env*.local
+*.log
+README.md
+PROJECT_IDEAS.md

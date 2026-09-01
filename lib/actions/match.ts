@@ -303,11 +303,19 @@ export async function getMatchById(matchId: string) {
   }
 }
 
-export async function getLiveMatchesCount() {
+export async function getLiveMatchesCount(date?: string) {
   try {
-    return await prisma.match.count({
-      where: { status: MatchStatus.LIVE },
-    });
+    const where: Prisma.MatchWhereInput = { status: MatchStatus.LIVE };
+    if (date) {
+      const [year, month, day] = date.split("-").map(Number);
+      const startOfDayVN = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0) - 7 * 3600 * 1000);
+      const endOfDayVN = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999) - 7 * 3600 * 1000);
+      where.matchDate = {
+        gte: startOfDayVN,
+        lte: endOfDayVN,
+      };
+    }
+    return await prisma.match.count({ where });
   } catch {
     return 0;
   }

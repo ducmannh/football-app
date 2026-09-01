@@ -62,7 +62,7 @@ export default function HomePage() {
             leagueCode: selectedLeague,
             status: selectedStatus,
           }),
-          getLiveMatchesCount(),
+          getLiveMatchesCount(selectedDate),
         ]);
 
         if (isMounted) {
@@ -97,6 +97,9 @@ export default function HomePage() {
   }, [liveCount]);
 
   // Live Matches list for top ticker
+  const liveCountInView = selectedStatus === "ALL"
+    ? matches.filter((m) => m.status === "LIVE").length
+    : liveCount;
   const liveMatches = matches.filter((m) => m.status === "LIVE");
 
   // Client-side search filter
@@ -203,9 +206,9 @@ export default function HomePage() {
                 >
                   <Radio className="w-3.5 h-3.5" />
                   <span>Trực tiếp</span>
-                  {liveCount > 0 && (
+                  {liveCountInView > 0 && (
                     <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-extrabold">
-                      {liveCount}
+                      {liveCountInView}
                     </span>
                   )}
                 </button>

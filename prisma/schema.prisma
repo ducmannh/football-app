@@ -1,0 +1,373 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  MANAGER
+  ADMIN
+}
+
+enum LeagueType {
+  LEAGUE
+  CUP
+}
+
+enum Position {
+  GOALKEEPER
+  DEFENDER
+  MIDFIELDER
+  FORWARD
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+  POSTPONED
+  CANCELLED
+}
+
+enum EventType {
+  GOAL
+  ASSIST
+  YELLOW_CARD
+  RED_CARD
+  SUBSTITUTION
+  VAR
+  PENALTY_SCORED
+  PENALTY_MISSED
+  OWN_GOAL
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String?
+  avatar    String?
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  favorites Favorite[]
+
+  @@map("users")
+}
+
+model League {
+  id        String     @id @default(cuid())
+  code      String     @unique // e.g. "PL", "PD", "SA", "BL1", "FL1", "CL", "EL", "ECL"
+  name      String     @unique
+  shortName String
+  country   String     // "England", "Spain", "Italy", "Germany", "France", "Europe"
+  flag      String?    // Country flag emoji or url
+  logo      String     // League logo url
+  type      LeagueType @default(LEAGUE)
+  order     Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  teams             Team[]
+  matches           Match[]
+  standings         Standing[]
+  playerSeasonStats PlayerSeasonStat[]
+  favorites         Favorite[]
+
+  @@map("leagues")
+}
+
+model Season {
+  id        String   @id @default(cuid())
+  name      String   @unique // e.g. "2025/2026"
+  isCurrent Boolean  @default(true)
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  matches           Match[]
+  standings         Standing[]
+  playerSeasonStats PlayerSeasonStat[]
+
+  @@map("seasons")
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  shortName   String
+  code        String?  // e.g. "ARS", "MCI", "RMA"
+  logo        String
+  stadium     String?
+  capacity    Int?
+  city        String?
+  foundedYear Int?     // e.g. 1886, 1902
+  coach       String?  // e.g. "Mikel Arteta", "Carlo Ancelotti"
+  website     String?
+  primaryColor String? @default("#10B981") // Hex color for UI accents
+  leagueId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  league      League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  players     Player[]
+  homeMatches Match[]       @relation("HomeTeam")
+  awayMatches Match[]       @relation("AwayTeam")
+  events      MatchEvent[]
+  lineups     MatchLineup[]
+  standings   Standing[]
+  favorites   Favorite[]
+
+  @@map("teams")
+}
+
+model Player {
+  id            String      @id @default(cuid())
+  espnId        String?     // Numeric ESPN Athlete ID e.g. "124091"
+  name          String
+  shortName     String?
+  number        Int?
+  position      Position    @default(MIDFIELDER)
+  avatar        String?
+  nationality   String?
+  dateOfBirth   DateTime?
+  height        Int?        // in cm (e.g. 194)
+  weight        Int?        // in kg (e.g. 88)
+  preferredFoot String?     // "Trái", "Phải", "Cả hai"
+  marketValue   String?     // "€180M", "€150M"
+  teamId        String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  team        Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  events      MatchEvent[]       @relation("EventPlayer")
+  assists     MatchEvent[]       @relation("AssistPlayer")
+  lineups     MatchLineup[]
+  stats       PlayerSeasonStat[]
+
+  @@map("players")
+}
+
+model Match {
+  id                String      @id @default(cuid())
+  leagueId          String
+  seasonId          String
+  homeTeamId        String
+  awayTeamId        String
+  round             String      // "Vòng 26", "Tứ kết lượt đi", "Vòng bảng - Lượt 5"
+  matchDate         DateTime
+  status            MatchStatus @default(SCHEDULED)
+  minute            String?     // e.g. "68'", "45+2'", "HT", "FT"
+  homeScore         Int         @default(0)
+  awayScore         Int         @default(0)
+  homeHalfTimeScore Int?        @default(0)
+  awayHalfTimeScore Int?        @default(0)
+  homePenaltyScore  Int?        // Điểm loạt sút luân lưu (e.g. 5)
+  awayPenaltyScore  Int?        // Điểm loạt sút luân lưu (e.g. 4)
+  extraTimeStatus   String?     // "AET" (Hiệp phụ), "PEN" (Luân lưu)
+  stadium           String?
+  referee           String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  league   League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season   Season        @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  homeTeam Team          @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Cascade)
+  awayTeam Team          @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Cascade)
+  events   MatchEvent[]
+  lineups  MatchLineup[]
+  stats    MatchStat?
+
+  @@index([matchDate])
+  @@index([leagueId, matchDate])
+  @@index([status])
+  @@map("matches")
+}
+
+model MatchEvent {
+  id             String    @id @default(cuid())
+  matchId        String
+  teamId         String
+  playerId       String?
+  assistPlayerId String?
+  minute         Int
+  extraMinute    Int?
+  type           EventType
+  description    String?
+  createdAt      DateTime  @default(now())
+
+  match        Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team         Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player       Player? @relation("EventPlayer", fields: [playerId], references: [id], onDelete: SetNull)
+  assistPlayer Player? @relation("AssistPlayer", fields: [assistPlayerId], references: [id], onDelete: SetNull)
+
+  @@index([matchId])
+  @@map("match_events")
+}
+
+model MatchLineup {
+  id          String   @id @default(cuid())
+  matchId     String
+  teamId      String
+  playerId    String
+  formation   String   @default("4-3-3") // "4-3-3", "4-2-3-1"
+  isStarting  Boolean  @default(true)
+  position    Position
+  gridX       Float?   // Coordinate on tactical pitch (0 to 100)
+  gridY       Float?   // Coordinate on tactical pitch (0 to 100)
+  jerseyNumber Int?
+  createdAt   DateTime @default(now())
+
+  match  Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, playerId])
+  @@map("match_lineups")
+}
+
+model MatchStat {
+  id                 String   @id @default(cuid())
+  matchId            String   @unique
+  possessionHome     Int      @default(50) // %
+  possessionAway     Int      @default(50)
+  shotsHome          Int      @default(0)
+  shotsAway          Int      @default(0)
+  shotsOnTargetHome  Int      @default(0)
+  shotsOnTargetAway  Int      @default(0)
+  xGHome             Float    @default(0.0) // Expected goals
+  xGAway             Float    @default(0.0)
+  cornersHome        Int      @default(0)
+  cornersAway        Int      @default(0)
+  foulsHome          Int      @default(0)
+  foulsAway          Int      @default(0)
+  yellowCardsHome    Int      @default(0)
+  yellowCardsAway    Int      @default(0)
+  redCardsHome       Int      @default(0)
+  redCardsAway       Int      @default(0)
+  savesHome          Int      @default(0)
+  savesAway          Int      @default(0)
+  passesHome         Int      @default(0)
+  passesAway         Int      @default(0)
+  passAccuracyHome   Int      @default(0) // %
+  passAccuracyAway   Int      @default(0) // %
+  offsidesHome       Int      @default(0)
+  offsidesAway       Int      @default(0)
+  bigChancesHome     Int      @default(0)
+  bigChancesAway     Int      @default(0)
+  bigChancesMissedHome Int    @default(0)
+  bigChancesMissedAway Int    @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@map("match_stats")
+}
+
+// Bảng Xếp Hạng Giải Đấu & Cúp Châu Âu
+model Standing {
+  id               String   @id @default(cuid())
+  leagueId         String
+  seasonId         String
+  teamId           String
+  position         Int      // Thứ hạng 1 -> 20 (hoặc 1 -> 36 thể thức League Phase)
+  played           Int      @default(0)
+  won              Int      @default(0)
+  draw             Int      @default(0)
+  lost             Int      @default(0)
+  goalsFor         Int      @default(0)
+  goalsAgainst     Int      @default(0)
+  goalDiff         Int      @default(0)
+  points           Int      @default(0)
+  form             String?  @default("W,W,D,L,W") // Chuỗi 5 trận gần nhất
+  // Sân nhà
+  homePlayed       Int      @default(0)
+  homeWon          Int      @default(0)
+  homeDraw         Int      @default(0)
+  homeLost         Int      @default(0)
+  homeGoalsFor     Int      @default(0)
+  homeGoalsAgainst Int      @default(0)
+  homePoints       Int      @default(0)
+  // Sân khách
+  awayPlayed       Int      @default(0)
+  awayWon          Int      @default(0)
+  awayDraw         Int      @default(0)
+  awayLost         Int      @default(0)
+  awayGoalsFor     Int      @default(0)
+  awayGoalsAgainst Int      @default(0)
+  awayPoints       Int      @default(0)
+  // Đánh dấu suất vé: "CL" (Top 4), "EL" (Top 5), "ECL" (Top 6), "RELEGATION" (Nhóm rớt hạng), "UCL_TOP8", "UCL_PLAYOFF"
+  zone             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, seasonId, teamId])
+  @@index([leagueId, seasonId, position])
+  @@map("standings")
+}
+
+// Thống Kê Cá Nhân Cầu Thủ Trong Mùa Giải (Stats Hub)
+model PlayerSeasonStat {
+  id             String   @id @default(cuid())
+  playerId       String
+  leagueId       String
+  seasonId       String
+  appearances    Int      @default(0)
+  minutesPlayed  Int      @default(0)
+  starts         Int      @default(0) // STRT
+  goals          Int      @default(0) // G
+  assists        Int      @default(0) // A
+  shots          Int      @default(0) // SHOT
+  shotsOnGoal    Int      @default(0) // SOG
+  foulsCommitted Int      @default(0) // FC
+  foulsSuffered  Int      @default(0) // FA
+  yellowCards    Int      @default(0) // YC
+  redCards       Int      @default(0) // RC
+  offsides       Int      @default(0) // OF
+  penalties      Int      @default(0)
+  cleanSheets    Int      @default(0)
+  saves          Int      @default(0)
+  chancesCreated Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, leagueId, seasonId])
+  @@index([leagueId, seasonId, goals])
+  @@index([leagueId, seasonId, assists])
+  @@index([leagueId, seasonId, cleanSheets])
+  @@map("player_season_stats")
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  teamId    String?
+  leagueId  String?
+  createdAt DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team   Team?   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  league League? @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@unique([userId, leagueId])
+  @@map("favorites")
+}

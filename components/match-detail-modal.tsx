@@ -241,6 +241,25 @@ export function MatchDetailModal({
                           {match.extraTimeStatus === "AET" ? "FT (AET)" : "FT"}
                         </span>
                       )}
+
+                      {(() => {
+                        let htHome = match.homeHalfTimeScore;
+                        let htAway = match.awayHalfTimeScore;
+
+                        if ((htHome === null || htAway === null) && match.events && match.events.length > 0) {
+                          htHome = match.events.filter((e) => e.teamId === match.homeTeamId && (e.type === "GOAL" || e.type === "PENALTY_SCORED" || e.type === "OWN_GOAL") && e.minute <= 45).length;
+                          htAway = match.events.filter((e) => e.teamId === match.awayTeamId && (e.type === "GOAL" || e.type === "PENALTY_SCORED" || e.type === "OWN_GOAL") && e.minute <= 45).length;
+                        }
+
+                        if (htHome != null && htAway != null && match.homePenaltyScore === null) {
+                          return (
+                            <span className="text-[9px] sm:text-xs text-muted-foreground font-semibold mt-0.5">
+                              (HT {htHome}-{htAway})
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   )}
                 </div>

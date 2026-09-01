@@ -88,11 +88,25 @@ export async function syncLiveMatchesFromEspn(): Promise<void> {
         const awayScore = parseInt(a.score || "0", 10);
         const displayClock = comp.status?.displayClock || (status === MatchStatus.LIVE ? "Đang đá" : null);
 
+        // Tỉ số Hiệp 1 (HT)
+        const hLinescore = h.linescores?.[0]?.displayValue ?? h.linescores?.[0]?.value;
+        const aLinescore = a.linescores?.[0]?.displayValue ?? a.linescores?.[0]?.value;
+        const homeHalfTimeScore = hLinescore != null ? parseInt(hLinescore, 10) : null;
+        const awayHalfTimeScore = aLinescore != null ? parseInt(aLinescore, 10) : null;
+
+        // Tỉ số Penalty (nếu có)
+        const hPen = h.shootoutScore ?? (h.linescores?.length > 2 ? h.linescores?.[2]?.displayValue : null);
+        const aPen = a.shootoutScore ?? (a.linescores?.length > 2 ? a.linescores?.[2]?.displayValue : null);
+        const homePenaltyScore = hPen != null ? parseInt(hPen, 10) : null;
+        const awayPenaltyScore = aPen != null ? parseInt(aPen, 10) : null;
+
         const existing = await prisma.match.findFirst({
           where: { homeTeamId, awayTeamId },
         });
 
         if (existing) {
+          const scoreChanged = existing.homeScore !== homeScore || existing.awayScore !== awayScore || existing.status !== status;
+          
           await prisma.match.update({
             where: { id: existing.id },
             data: {
@@ -100,8 +114,22 @@ export async function syncLiveMatchesFromEspn(): Promise<void> {
               awayScore,
               status,
               minute: displayClock,
+              ...(homeHalfTimeScore !== null ? { homeHalfTimeScore } : {}),
+              ...(awayHalfTimeScore !== null ? { awayHalfTimeScore } : {}),
+              ...(homePenaltyScore !== null ? { homePenaltyScore } : {}),
+              ...(awayPenaltyScore !== null ? { awayPenaltyScore } : {}),
             },
           });
+
+          // Tự động đồng bộ chi tiết sự kiện bàn thắng, kiến tạo, thẻ phạt cho trận Live
+          if (status === MatchStatus.LIVE || (status === MatchStatus.FINISHED && scoreChanged)) {
+            try {
+              const { fetchAndSyncLiveMatchDetail } = await import("@/lib/services/match-detail-service");
+              await fetchAndSyncLiveMatchDetail(existing.id);
+            } catch (e) {
+              console.warn(`Live detail sync failed for match ${existing.id}:`, e);
+            }
+          }
         }
       }
     }

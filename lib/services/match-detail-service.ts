@@ -103,6 +103,18 @@ export async function fetchAndSyncLiveMatchDetail(matchId: string) {
     const awayScore = parseInt(aComp?.score || "0", 10);
     const displayClock = headerComp.status?.displayClock || (status === MatchStatus.LIVE ? "Đang đá" : null);
 
+    // Tỉ số Hiệp 1 (HT)
+    const hLinescore = hComp?.linescores?.[0]?.displayValue ?? hComp?.linescores?.[0]?.value;
+    const aLinescore = aComp?.linescores?.[0]?.displayValue ?? aComp?.linescores?.[0]?.value;
+    const homeHalfTimeScore = hLinescore != null ? parseInt(hLinescore, 10) : null;
+    const awayHalfTimeScore = aLinescore != null ? parseInt(aLinescore, 10) : null;
+
+    // Tỉ số Penalty (nếu có)
+    const hPen = hComp?.shootoutScore ?? (hComp?.linescores?.length > 2 ? hComp?.linescores?.[2]?.displayValue : null);
+    const aPen = aComp?.shootoutScore ?? (aComp?.linescores?.length > 2 ? aComp?.linescores?.[2]?.displayValue : null);
+    const homePenaltyScore = hPen != null ? parseInt(hPen, 10) : null;
+    const awayPenaltyScore = aPen != null ? parseInt(aPen, 10) : null;
+
     // Update match main info
     await prisma.match.update({
       where: { id: matchId },
@@ -111,6 +123,10 @@ export async function fetchAndSyncLiveMatchDetail(matchId: string) {
         awayScore,
         status,
         minute: displayClock,
+        ...(homeHalfTimeScore !== null ? { homeHalfTimeScore } : {}),
+        ...(awayHalfTimeScore !== null ? { awayHalfTimeScore } : {}),
+        ...(homePenaltyScore !== null ? { homePenaltyScore } : {}),
+        ...(awayPenaltyScore !== null ? { awayPenaltyScore } : {}),
       },
     });
 
@@ -283,18 +299,18 @@ export async function fetchAndSyncLiveMatchDetail(matchId: string) {
 
         // 2. Assist Player (Cầu thủ kiến tạo)
         let assistPlayerId: string | null = null;
-        if (type === EventType.GOAL || type === EventType.PENALTY_SCORED) {
+        if (type === EventType.GOAL) {
           const assistAth = ke.participants?.[1]?.athlete;
           let assistName = assistAth?.displayName || assistAth?.fullName;
 
-          if (!assistName) {
-            const matchAssist = ke.text?.match(/Assisted by ([^\.\,]+)/i);
+          if (!assistName && ke.text) {
+            const matchAssist = ke.text.match(/Assisted by ([A-ZÀ-Ỹa-zà-ỹ\s\.\-'\u00C0-\u024F\u1E00-\u1EFF]+?)(?:\s+with|\s+following|\s+after|\s+from|\.|\,|$)/i);
             if (matchAssist?.[1]) {
               assistName = matchAssist[1].trim();
             }
           }
 
-          if (assistName) {
+          if (assistName && assistName.length > 2) {
             let assistPlayer = await prisma.player.findFirst({
               where: {
                 OR: [

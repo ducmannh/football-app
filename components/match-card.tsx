@@ -279,14 +279,29 @@ export function MatchCard({
                 </span>
               )}
 
-              {match.homeHalfTimeScore !== null &&
-                match.awayHalfTimeScore !== null &&
-                !isScheduled &&
-                match.homePenaltyScore === null && (
-                  <span className="text-[9px] sm:text-[10px] text-muted-foreground font-semibold mt-0.5">
-                    (HT {match.homeHalfTimeScore}-{match.awayHalfTimeScore})
-                  </span>
-                )}
+              {(() => {
+                let htHome = match.homeHalfTimeScore;
+                let htAway = match.awayHalfTimeScore;
+
+                // Fallback tính toán HT từ danh sách sự kiện bàn thắng nếu chưa được lưu
+                if ((htHome === null || htAway === null) && !isScheduled && match.events && match.events.length > 0) {
+                  htHome = match.events.filter(
+                    (e) => (getGoalBeneficiary(e, match) === "home") && e.minute <= 45
+                  ).length;
+                  htAway = match.events.filter(
+                    (e) => (getGoalBeneficiary(e, match) === "away") && e.minute <= 45
+                  ).length;
+                }
+
+                if (htHome != null && htAway != null && !isScheduled && match.homePenaltyScore === null) {
+                  return (
+                    <span className="text-[9px] sm:text-[10px] text-muted-foreground font-semibold mt-0.5">
+                      (HT {htHome}-{htAway})
+                    </span>
+                  );
+                }
+                return null;
+              })()}
             </div>
           )}
         </div>
@@ -348,6 +363,11 @@ export function MatchCard({
                 >
                   <span className={cn("break-words", isOG && "text-rose-500 font-semibold")}>
                     {name} {e.minute}&apos;{tag}
+                    {!isOG && !isPen && e.assistPlayer?.name && (
+                      <span className="text-[9.5px] text-muted-foreground/80 font-normal">
+                        {" "}({e.assistPlayer.name})
+                      </span>
+                    )}
                   </span>
                   {isOG ? (
                     <OwnGoalIcon className="w-3 h-3 flex-shrink-0" />
@@ -390,6 +410,11 @@ export function MatchCard({
                   )}
                   <span className={cn("break-words", isOG && "text-rose-500 font-semibold")}>
                     {name} {e.minute}&apos;{tag}
+                    {!isOG && !isPen && e.assistPlayer?.name && (
+                      <span className="text-[9.5px] text-muted-foreground/80 font-normal">
+                        {" "}({e.assistPlayer.name})
+                      </span>
+                    )}
                   </span>
                 </div>
               );

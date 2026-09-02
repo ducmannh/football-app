@@ -481,7 +481,7 @@ async function main() {
             else if (pName.includes("forw") || pName.includes("strik") || pName.includes("wing")) pos = "FORWARD";
 
             const number = ath.jersey ? parseInt(ath.jersey, 10) : null;
-            const avatar = ath.headshot?.href || (ath.id ? `https://a.espncdn.com/i/headshots/soccer/players/full/${ath.id}.png` : null);
+            const avatar = ath.headshot?.href || null;
             const nationality = ath.citizenship || null;
             const dateOfBirth = ath.dateOfBirth ? new Date(ath.dateOfBirth) : null;
             const espnId = ath.id ? String(ath.id) : null;
@@ -1020,20 +1020,18 @@ async function main() {
     }
   }
 
-  // 11. Đảm bảo 100% cầu thủ có đầy đủ thông tin thể chất & avatar từ ESPN
-  console.log("\n🖼️ 11. Chuẩn hóa & Nạp đầy đủ thông tin thể chất & avatar từ ESPN cho toàn bộ cầu thủ...");
+  // 11. Đảm bảo 100% cầu thủ có đầy đủ thông tin thể chất từ ESPN
+  console.log("\n🖼️ 11. Chuẩn hóa & Nạp đầy đủ thông tin thể chất từ ESPN cho toàn bộ cầu thủ...");
   const allPlayersInDb = await prisma.player.findMany({
     include: { team: true },
   });
 
   for (const p of allPlayersInDb) {
     const bio = computePlayerBio(p.name, p.position, null, null, p.team?.name);
-    const espnAvatar = p.espnId ? `https://a.espncdn.com/i/headshots/soccer/players/full/${p.espnId}.png` : null;
 
     await prisma.player.update({
       where: { id: p.id },
       data: {
-        avatar: p.avatar && p.avatar.includes("espn") ? p.avatar : espnAvatar,
         ...(!p.height ? { height: bio.height } : {}),
         ...(!p.weight ? { weight: bio.weight } : {}),
         ...(!p.preferredFoot ? { preferredFoot: bio.preferredFoot } : {}),

@@ -5,7 +5,7 @@ import { Trophy, Radio, BarChart3, Users } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
-export type NavTab = "MATCHES" | "STANDINGS" | "STATS";
+export type NavTab = "MATCHES" | "FULL_FIXTURES" | "STANDINGS" | "STATS";
 
 interface NavbarProps {
   liveCount: number;
@@ -56,6 +56,20 @@ export function Navbar({ liveCount, activeTab, onSelectTab }: NavbarProps) {
           >
             <span>⚽</span>
             <span>Lịch & Tỉ số</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onSelectTab("FULL_FIXTURES")}
+            className={cn(
+              "flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs sm:text-[13px] font-bold transition-all duration-200 cursor-pointer whitespace-nowrap active:scale-95",
+              activeTab === "FULL_FIXTURES"
+                ? "bg-card text-emerald-500 dark:text-emerald-400 shadow-md font-black border border-border/80"
+                : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+            )}
+          >
+            <span>📅</span>
+            <span>Lịch toàn giải</span>
           </button>
 
           <button

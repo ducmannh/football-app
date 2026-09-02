@@ -9,6 +9,7 @@ interface LeagueBarProps {
   leagues: League[];
   selectedLeague: string;
   onSelectLeague: (code: string) => void;
+  hideAllOption?: boolean;
 }
 
 const COUNTRY_NAMES_VI: Record<string, string> = {
@@ -24,13 +25,14 @@ export function LeagueBar({
   leagues,
   selectedLeague,
   onSelectLeague,
+  hideAllOption = false,
 }: LeagueBarProps) {
   // Determine active country based on selectedLeague
-  const [selectedCountry, setSelectedCountry] = useState<string>("ALL");
+  const [selectedCountry, setSelectedCountry] = useState<string>(hideAllOption ? "England" : "ALL");
 
   useEffect(() => {
     if (selectedLeague === "ALL") {
-      setSelectedCountry("ALL");
+      setSelectedCountry(hideAllOption ? "England" : "ALL");
     } else if (selectedLeague.startsWith("COUNTRY:")) {
       setSelectedCountry(selectedLeague.replace("COUNTRY:", ""));
     } else {
@@ -39,7 +41,7 @@ export function LeagueBar({
         setSelectedCountry(found.country);
       }
     }
-  }, [selectedLeague, leagues]);
+  }, [selectedLeague, leagues, hideAllOption]);
 
   const validLeagues = leagues.filter(
     (l) =>
@@ -77,7 +79,13 @@ export function LeagueBar({
       onSelectLeague("ALL");
     } else {
       setSelectedCountry(country);
-      onSelectLeague(`COUNTRY:${country}`);
+      if (hideAllOption) {
+        const countryLeagues = countryGroups[country] || [];
+        const firstLeague = countryLeagues[0];
+        onSelectLeague(firstLeague ? firstLeague.code : "PL");
+      } else {
+        onSelectLeague(`COUNTRY:${country}`);
+      }
     }
   };
 
@@ -89,20 +97,22 @@ export function LeagueBar({
           style={{ WebkitOverflowScrolling: "touch" }}
           className="w-full max-w-full overflow-x-auto overflow-y-hidden scrollbar-none flex items-center justify-start sm:justify-center gap-1.5 sm:gap-2 touch-pan-x overscroll-x-contain py-0.5"
         >
-          {/* Tất cả giải đấu button */}
-          <button
-            type="button"
-            onClick={() => handleCountryClick("ALL")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold transition-all duration-200 cursor-pointer border shadow-xs active:scale-95 flex-shrink-0 whitespace-nowrap",
-              selectedCountry === "ALL" && selectedLeague === "ALL"
-                ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-500/25 scale-[1.03]"
-                : "bg-card/80 text-muted-foreground border-border hover:text-foreground hover:bg-secondary/70 hover:border-border/80"
-            )}
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>Tất cả giải ({leagues.length})</span>
-          </button>
+          {/* Tất cả giải đấu button (chỉ hiện khi hideAllOption là false) */}
+          {!hideAllOption && (
+            <button
+              type="button"
+              onClick={() => handleCountryClick("ALL")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold transition-all duration-200 cursor-pointer border shadow-xs active:scale-95 flex-shrink-0 whitespace-nowrap",
+                selectedCountry === "ALL" && selectedLeague === "ALL"
+                  ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-500/25 scale-[1.03]"
+                  : "bg-card/80 text-muted-foreground border-border hover:text-foreground hover:bg-secondary/70 hover:border-border/80"
+              )}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>Tất cả giải ({leagues.length})</span>
+            </button>
+          )}
 
           {/* Nút Quốc gia */}
           {sortedCountries.map((country) => {
@@ -161,21 +171,23 @@ export function LeagueBar({
               <ChevronRight className="w-3 h-3" />
             </div>
 
-            {/* Nút lọc tất cả các giải trong quốc gia này */}
-            <button
-              type="button"
-              onClick={() => onSelectLeague(`COUNTRY:${selectedCountry}`)}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all duration-200 cursor-pointer border whitespace-nowrap active:scale-95 flex-shrink-0",
-                selectedLeague === `COUNTRY:${selectedCountry}`
-                  ? "bg-emerald-500/20 text-emerald-500 border-emerald-500/50 shadow-xs"
-                  : "bg-card/60 text-muted-foreground border-border/60 hover:text-foreground hover:bg-secondary/60"
-              )}
-            >
-              <span>
-                🔥 {selectedCountry === "Europe" ? "Tất cả Cúp Châu Âu" : `Tất cả giải ở ${COUNTRY_NAMES_VI[selectedCountry] || selectedCountry}`}
-              </span>
-            </button>
+            {/* Nút lọc tất cả các giải trong quốc gia này (chỉ hiện khi hideAllOption là false) */}
+            {!hideAllOption && (
+              <button
+                type="button"
+                onClick={() => onSelectLeague(`COUNTRY:${selectedCountry}`)}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all duration-200 cursor-pointer border whitespace-nowrap active:scale-95 flex-shrink-0",
+                  selectedLeague === `COUNTRY:${selectedCountry}`
+                    ? "bg-emerald-500/20 text-emerald-500 border-emerald-500/50 shadow-xs"
+                    : "bg-card/60 text-muted-foreground border-border/60 hover:text-foreground hover:bg-secondary/60"
+                )}
+              >
+                <span>
+                  🔥 {selectedCountry === "Europe" ? "Tất cả Cúp Châu Âu" : `Tất cả giải ở ${COUNTRY_NAMES_VI[selectedCountry] || selectedCountry}`}
+                </span>
+              </button>
+            )}
 
             {/* Các giải đấu con của quốc gia */}
             {activeCountryLeagues.map((league) => {

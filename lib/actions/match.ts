@@ -34,17 +34,6 @@ export async function syncLiveMatchesFromEspn(): Promise<void> {
   lastLiveSyncTime = now;
 
   try {
-    const res = await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/scorepanel", {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json",
-      },
-    });
-    if (!res.ok) return;
-
-    const data = await res.json();
-    const scores = data.scores || [];
-
     const allTeams = await prisma.team.findMany();
     const teamMap = new Map<string, string>();
     for (const t of allTeams) {
@@ -52,18 +41,16 @@ export async function syncLiveMatchesFromEspn(): Promise<void> {
       teamMap.set(t.shortName.toLowerCase().trim(), t.id);
     }
 
-    for (const s of scores) {
-      const events = s.events || [];
+    const processEvents = async (events: any[]) => {
       for (const ev of events) {
-        const comp = ev.competitions?.[0];
-        if (!comp) continue;
-
-        const h = comp.competitors?.find((c: any) => c.homeAway === "home");
-        const a = comp.competitors?.find((c: any) => c.homeAway === "away");
+        const comp = ev.competitions ? ev.competitions[0] : null;
+        const competitors = comp?.competitors || ev.competitors || [];
+        const h = competitors.find((c: any) => c.homeAway === "home") || competitors[0];
+        const a = competitors.find((c: any) => c.homeAway === "away") || competitors[1];
         if (!h || !a) continue;
 
-        const hName = (h.team?.displayName || h.team?.name || "").toLowerCase().trim();
-        const aName = (a.team?.displayName || a.team?.name || "").toLowerCase().trim();
+        const hName = (h.team?.displayName || h.team?.name || h.displayName || h.name || "").toLowerCase().trim();
+        const aName = (a.team?.displayName || a.team?.name || a.displayName || a.name || "").toLowerCase().trim();
 
         let homeTeamId = teamMap.get(hName);
         let awayTeamId = teamMap.get(aName);
@@ -79,14 +66,14 @@ export async function syncLiveMatchesFromEspn(): Promise<void> {
 
         if (!homeTeamId || !awayTeamId) continue;
 
-        const state = comp.status?.type?.state;
+        const rawState = comp?.status?.type?.state || ev.status;
         let status: MatchStatus = MatchStatus.SCHEDULED;
-        if (state === "in") status = MatchStatus.LIVE;
-        else if (state === "post") status = MatchStatus.FINISHED;
+        if (rawState === "in") status = MatchStatus.LIVE;
+        else if (rawState === "post") status = MatchStatus.FINISHED;
 
         const homeScore = parseInt(h.score || "0", 10);
         const awayScore = parseInt(a.score || "0", 10);
-        const displayClock = comp.status?.displayClock || (status === MatchStatus.LIVE ? "Đang đá" : null);
+        const displayClock = comp?.status?.displayClock || ev.clock || ev.displayClock || (status === MatchStatus.LIVE ? "Đang đá" : null);
 
         // Tỉ số Hiệp 1 (HT)
         const hLinescore = h.linescores?.[0]?.displayValue ?? h.linescores?.[0]?.value;
@@ -100,13 +87,23 @@ export async function syncLiveMatchesFromEspn(): Promise<void> {
         const homePenaltyScore = hPen != null ? parseInt(hPen, 10) : null;
         const awayPenaltyScore = aPen != null ? parseInt(aPen, 10) : null;
 
+        const eventDate = ev.date ? new Date(ev.date) : new Date();
+
+        // Match with database within +/- 2 days of the event date
         const existing = await prisma.match.findFirst({
-          where: { homeTeamId, awayTeamId },
+          where: {
+            homeTeamId,
+            awayTeamId,
+            matchDate: {
+              gte: new Date(eventDate.getTime() - 2 * 86400 * 1000),
+              lte: new Date(eventDate.getTime() + 2 * 86400 * 1000),
+            },
+          },
         });
 
         if (existing) {
           const scoreChanged = existing.homeScore !== homeScore || existing.awayScore !== awayScore || existing.status !== status;
-          
+
           await prisma.match.update({
             where: { id: existing.id },
             data: {
@@ -121,7 +118,7 @@ export async function syncLiveMatchesFromEspn(): Promise<void> {
             },
           });
 
-          // 1. Tự động đồng bộ chi tiết chuyên sâu (Lineup, Stats, ESPN summary có đủ kiến tạo) cho trận Live hoặc vừa thay đổi tỷ số
+          // 1. Tự động đồng bộ chi tiết chuyên sâu cho trận Live hoặc vừa thay đổi tỷ số
           if (status === MatchStatus.LIVE || (status === MatchStatus.FINISHED && scoreChanged)) {
             try {
               const { fetchAndSyncLiveMatchDetail } = await import("@/lib/services/match-detail-service");
@@ -129,28 +126,59 @@ export async function syncLiveMatchesFromEspn(): Promise<void> {
             } catch (e) {
               console.warn(`Live detail sync failed for match ${existing.id}:`, e);
             }
-          } else if (comp.details && comp.details.length > 0) {
-            // Chỉ nạp từ comp.details nếu trận đấu chưa hề có sự kiện nào trong DB
-            try {
-              const eventsCount = await prisma.matchEvent.count({ where: { matchId: existing.id } });
-              if (eventsCount === 0) {
-                const { syncMatchEventsFromDetails } = await import("@/lib/services/football-sync");
-                await syncMatchEventsFromDetails(
-                  existing.id,
-                  homeTeamId,
-                  awayTeamId,
-                  h.team?.id,
-                  a.team?.id,
-                  comp.details
-                );
-              }
-            } catch (e) {
-              console.warn(`Details sync failed for match ${existing.id}:`, e);
-            }
           }
         }
       }
+    };
+
+    // 1. Fetch Global Soccer Header from ESPN Web API
+    try {
+      const headerRes = await fetch("https://site.web.api.espn.com/apis/v2/scoreboard/header?sport=soccer", {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept": "application/json",
+        },
+      });
+      if (headerRes.ok) {
+        const headerData = await headerRes.json();
+        const soccerSports = headerData.sports?.[0];
+        for (const lg of soccerSports?.leagues || []) {
+          if (lg.events && lg.events.length > 0) {
+            await processEvents(lg.events);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("ESPN global header sync warning:", e);
     }
+
+    // 2. Fetch specific active tournament scoreboards
+    const leagueEspnCodes = [
+      "ita.coppa_italia", "ger.dfb_pokal", "eng.1", "esp.1", "ita.1", "ger.1", "fra.1",
+      "eng.fa", "eng.league_cup", "esp.copa_del_rey", "fra.coupe_de_france",
+      "uefa.champions", "uefa.europa", "uefa.europa.conf"
+    ];
+
+    await Promise.allSettled(
+      leagueEspnCodes.map(async (code) => {
+        try {
+          const res = await fetch(`https://site.web.api.espn.com/apis/site/v2/sports/soccer/${code}/scoreboard`, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+              "Accept": "application/json",
+            },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.events && data.events.length > 0) {
+              await processEvents(data.events);
+            }
+          }
+        } catch {
+          // Ignore individual league network errors
+        }
+      })
+    );
   } catch (err) {
     console.error("Live match sync error:", err);
   }
@@ -233,6 +261,152 @@ export async function getMatches(params?: {
   } catch (error) {
     console.error("Error fetching matches:", error);
     return [];
+  }
+}
+
+export async function getFullLeagueFixtures(params: {
+  leagueCode: string;
+  seasonName?: string;
+  status?: string;
+  round?: string;
+  searchTeam?: string;
+}) {
+  try {
+    // Synchronize live scores from ESPN
+    await syncLiveMatchesFromEspn();
+
+    const season = await prisma.season.findFirst({
+      where: params.seasonName ? { name: params.seasonName } : { isCurrent: true },
+    });
+    if (!season) return { league: null, rounds: [], matches: [], teams: [], totalMatches: 0, finishedCount: 0, scheduledCount: 0, liveCount: 0, totalGoals: 0 };
+
+    let league = null;
+    let leagueIdFilter: Prisma.StringFilter | string | undefined = undefined;
+
+    if (params.leagueCode.startsWith("COUNTRY:")) {
+      const country = params.leagueCode.replace("COUNTRY:", "");
+      const countryLeagues = await prisma.league.findMany({
+        where: { country: country },
+        orderBy: { order: "asc" },
+      });
+      if (countryLeagues.length > 0) {
+        league = countryLeagues[0];
+        leagueIdFilter = { in: countryLeagues.map((l) => l.id) } as any;
+      }
+    } else if (params.leagueCode !== "ALL") {
+      league = await prisma.league.findUnique({
+        where: { code: params.leagueCode },
+      });
+      if (league) {
+        leagueIdFilter = league.id;
+      }
+    } else {
+      // Default to PL
+      league = await prisma.league.findFirst({
+        where: { code: "PL" },
+      });
+      if (league) {
+        leagueIdFilter = league.id;
+      }
+    }
+
+    if (!league) return { league: null, rounds: [], matches: [], teams: [], totalMatches: 0, finishedCount: 0, scheduledCount: 0, liveCount: 0, totalGoals: 0 };
+
+    // 1. Fetch all rounds in chronological order
+    const allRoundsRaw = await prisma.match.findMany({
+      where: {
+        leagueId: leagueIdFilter,
+        seasonId: season.id,
+      },
+      select: { round: true, matchDate: true },
+      orderBy: { matchDate: "asc" },
+    });
+
+    const seenRounds = new Set<string>();
+    const rounds: string[] = [];
+    for (const m of allRoundsRaw) {
+      if (m.round && !seenRounds.has(m.round)) {
+        seenRounds.add(m.round);
+        rounds.push(m.round);
+      }
+    }
+
+    // 2. Build where filter for matches
+    const where: Prisma.MatchWhereInput = {
+      leagueId: leagueIdFilter,
+      seasonId: season.id,
+    };
+
+    if (params.status && params.status !== "ALL") {
+      where.status = params.status as MatchStatus;
+    }
+
+    if (params.round && params.round !== "ALL") {
+      where.round = params.round;
+    }
+
+    if (params.searchTeam && params.searchTeam.trim()) {
+      const q = params.searchTeam.trim();
+      where.OR = [
+        { homeTeam: { name: { contains: q, mode: "insensitive" } } },
+        { homeTeam: { shortName: { contains: q, mode: "insensitive" } } },
+        { awayTeam: { name: { contains: q, mode: "insensitive" } } },
+        { awayTeam: { shortName: { contains: q, mode: "insensitive" } } },
+      ];
+    }
+
+    const matches = await prisma.match.findMany({
+      where,
+      orderBy: [
+        { matchDate: "asc" },
+      ],
+      include: {
+        league: true,
+        homeTeam: true,
+        awayTeam: true,
+        events: {
+          include: {
+            player: true,
+            assistPlayer: true,
+          },
+          orderBy: [{ minute: "asc" }, { extraMinute: "asc" }],
+        },
+      },
+    });
+
+    // 3. Stats for banner
+    const allLeagueMatches = await prisma.match.findMany({
+      where: { leagueId: league.id, seasonId: season.id },
+      select: { status: true, homeScore: true, awayScore: true },
+    });
+
+    const totalMatches = allLeagueMatches.length;
+    const finishedCount = allLeagueMatches.filter((m) => m.status === "FINISHED").length;
+    const liveCount = allLeagueMatches.filter((m) => m.status === "LIVE").length;
+    const scheduledCount = allLeagueMatches.filter((m) => m.status === "SCHEDULED").length;
+    const totalGoals = allLeagueMatches.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
+
+    // 4. Teams in league
+    const teams = await prisma.team.findMany({
+      where: { leagueId: league.id },
+      orderBy: { name: "asc" },
+    });
+
+    return {
+      league,
+      seasonName: season.name,
+      rounds,
+      matches,
+      teams,
+      totalMatches,
+      finishedCount,
+      scheduledCount,
+      liveCount,
+      totalGoals,
+    };
+  } catch (error) {
+    console.error("Error fetching full league fixtures:", error);
+    return { league: null, rounds: [], matches: [], teams: [], totalMatches: 0, finishedCount: 0, scheduledCount: 0, liveCount: 0, totalGoals: 0 };
   }
 }
 

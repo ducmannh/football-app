@@ -34,16 +34,37 @@ export function MobileBottomNav({
             onScrollToTop();
           }}
           className={cn(
-            "flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all duration-200 cursor-pointer relative",
+            "flex flex-col items-center justify-center py-1 px-2.5 rounded-2xl transition-all duration-200 cursor-pointer relative",
             activeTab === "MATCHES" && selectedStatus !== "LIVE"
               ? "text-emerald-500 font-bold scale-105"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
           <Calendar className="w-5 h-5 mb-0.5" />
-          <span className="text-[10px]">Lịch đấu</span>
+          <span className="text-[10px]">Theo ngày</span>
           {activeTab === "MATCHES" && selectedStatus !== "LIVE" && (
             <span className="w-1 h-1 rounded-full bg-emerald-500 mt-0.5" />
+          )}
+        </button>
+
+        {/* 2. Full Fixtures (Lịch toàn giải) */}
+        <button
+          type="button"
+          onClick={() => {
+            onSelectTab("FULL_FIXTURES");
+            onScrollToTop();
+          }}
+          className={cn(
+            "flex flex-col items-center justify-center py-1 px-2.5 rounded-2xl transition-all duration-200 cursor-pointer relative",
+            activeTab === "FULL_FIXTURES"
+              ? "text-teal-500 font-bold scale-105"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <span className="text-base leading-none mb-0.5">📅</span>
+          <span className="text-[10px]">Toàn giải</span>
+          {activeTab === "FULL_FIXTURES" && (
+            <span className="w-1 h-1 rounded-full bg-teal-500 mt-0.5" />
           )}
         </button>
 

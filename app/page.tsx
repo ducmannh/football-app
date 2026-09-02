@@ -13,6 +13,7 @@ import { PlayerDetailModal } from "@/components/player-detail-modal";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { StandingsTable } from "@/components/standings-table";
 import { StatsHub } from "@/components/stats-hub";
+import { FullFixturesHub } from "@/components/full-fixtures-hub";
 import {
   Search,
   RefreshCw,
@@ -362,7 +363,17 @@ export default function HomePage() {
           </>
         )}
 
-        {/* Module 2: STANDINGS (Bảng Xếp Hạng) */}
+        {/* Module 2: FULL FIXTURES (Toàn Bộ Lịch Đấu Của Giải) */}
+        {activeTab === "FULL_FIXTURES" && (
+          <FullFixturesHub
+            leagues={leagues}
+            initialLeagueCode={selectedLeague !== "ALL" ? selectedLeague : "PL"}
+            onSelectMatch={(matchId) => setSelectedMatchId(matchId)}
+            onSelectTeam={(teamId) => setSelectedTeamId(teamId)}
+          />
+        )}
+
+        {/* Module 3: STANDINGS (Bảng Xếp Hạng) */}
         {activeTab === "STANDINGS" && (
           <StandingsTable
             leagues={leagues}

@@ -99,8 +99,21 @@ export function PlayerDetailModal({
     }
   };
 
-  // Filter stats by selected season
-  const allStats = player?.stats || [];
+  // European Cup codes
+  const EUROPEAN_CUP_CODES = ["CL", "EL", "ECL", "USC"];
+
+  const isAllowedLeague = (league?: League | null) => {
+    if (!league) return false;
+    const code = league.code?.toUpperCase() || "";
+    // 1. Cúp Châu Âu (Champions League, Europa League, Conference League, Super Cup)
+    if (EUROPEAN_CUP_CODES.includes(code)) return true;
+    // 2. Giải VĐQG / Ngoại Hạng của quốc gia đó
+    if (league.type === "LEAGUE" || (team?.leagueId && league.id === team.leagueId)) return true;
+    return false;
+  };
+
+  // Filter stats by selected season AND allowed competitions (chỉ giải Ngoại Hạng & Cúp Châu Âu)
+  const allStats = (player?.stats || []).filter((s) => isAllowedLeague(s.league));
   const seasonStats = allStats.filter(
     (s) => s.season?.name === selectedSeason
   );
@@ -108,11 +121,11 @@ export function PlayerDetailModal({
   // Available competitions for this player in this season
   const availableLeaguesMap = new Map<string, League>();
   for (const st of seasonStats) {
-    if (st.league) {
+    if (st.league && isAllowedLeague(st.league)) {
       availableLeaguesMap.set(st.league.id, st.league);
     }
   }
-  if (team?.league && !availableLeaguesMap.has(team.league.id)) {
+  if (team?.league && isAllowedLeague(team.league) && !availableLeaguesMap.has(team.league.id)) {
     availableLeaguesMap.set(team.league.id, team.league);
   }
   const availableLeagues = Array.from(availableLeaguesMap.values());

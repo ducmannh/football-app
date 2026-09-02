@@ -260,6 +260,28 @@ export interface PlayerSeasonStatItem {
   season?: Season;
 }
 
+export interface TeamDisciplinePlayer {
+  id: string;
+  name: string;
+  shortName?: string | null;
+  avatar?: string | null;
+  number?: number | null;
+  position?: string | null;
+  yellowCards: number;
+  redCards: number;
+}
+
+export interface TeamDisciplineItem {
+  id: string;
+  teamId: string;
+  team: Team;
+  appearances: number;
+  yellowCards: number;
+  redCards: number;
+  points: number;
+  cardedPlayers: TeamDisciplinePlayer[];
+}
+
 export interface CompetitionStatItem {
   leagueId: string;
   leagueName: string;

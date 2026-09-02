@@ -121,13 +121,31 @@ export async function syncLiveMatchesFromEspn(): Promise<void> {
             },
           });
 
-          // Tự động đồng bộ chi tiết sự kiện bàn thắng, kiến tạo, thẻ phạt cho trận Live
+          // 1. Tự động đồng bộ chi tiết chuyên sâu (Lineup, Stats, ESPN summary có đủ kiến tạo) cho trận Live hoặc vừa thay đổi tỷ số
           if (status === MatchStatus.LIVE || (status === MatchStatus.FINISHED && scoreChanged)) {
             try {
               const { fetchAndSyncLiveMatchDetail } = await import("@/lib/services/match-detail-service");
               await fetchAndSyncLiveMatchDetail(existing.id);
             } catch (e) {
               console.warn(`Live detail sync failed for match ${existing.id}:`, e);
+            }
+          } else if (comp.details && comp.details.length > 0) {
+            // Chỉ nạp từ comp.details nếu trận đấu chưa hề có sự kiện nào trong DB
+            try {
+              const eventsCount = await prisma.matchEvent.count({ where: { matchId: existing.id } });
+              if (eventsCount === 0) {
+                const { syncMatchEventsFromDetails } = await import("@/lib/services/football-sync");
+                await syncMatchEventsFromDetails(
+                  existing.id,
+                  homeTeamId,
+                  awayTeamId,
+                  h.team?.id,
+                  a.team?.id,
+                  comp.details
+                );
+              }
+            } catch (e) {
+              console.warn(`Details sync failed for match ${existing.id}:`, e);
             }
           }
         }

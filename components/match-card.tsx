@@ -33,6 +33,34 @@ function getScorerName(e: any): string {
   return "Bàn thắng";
 }
 
+function getAssistName(e: any): string | null {
+  if (e.assistPlayer?.name) return e.assistPlayer.name;
+  if (e.assistPlayer?.shortName) return e.assistPlayer.shortName;
+  if (e.description) {
+    const matchAssist = e.description.match(/Assisted by ([A-ZÀ-Ỹa-zà-ỹ\s\.\-'\u00C0-\u024F\u1E00-\u1EFF]+?)(?:\s+with|\s+following|\s+after|\s+from|\.|\,|$)/i);
+    if (matchAssist?.[1]) {
+      return matchAssist[1].trim();
+    }
+  }
+  return null;
+}
+
+export function formatEventMinute(minute: number, extraMinute?: number | null): string {
+  if (extraMinute != null && extraMinute > 0) {
+    return `${minute}'+${extraMinute}'`;
+  }
+  if (minute >= 451 && minute <= 459) {
+    return `45'+${minute - 450}'`;
+  }
+  if (minute >= 901 && minute <= 909) {
+    return `90'+${minute - 900}'`;
+  }
+  if (minute >= 1201 && minute <= 1209) {
+    return `120'+${minute - 1200}'`;
+  }
+  return `${minute}'`;
+}
+
 function OwnGoalIcon({ className = "w-3 h-3" }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-center justify-center shrink-0 select-none", className)}>
@@ -356,16 +384,19 @@ export function MatchCard({
                 (e.description && (e.description.toLowerCase().includes("own goal") || e.description.toLowerCase().includes("phản lưới")));
               const tag = isPen ? " (P)" : isOG ? " (OG)" : "";
 
+              const assistName = !isOG && !isPen ? getAssistName(e) : null;
+              const minText = formatEventMinute(e.minute, e.extraMinute);
+
               return (
                 <div
                   key={e.id}
                   className="flex items-center gap-1 justify-end font-medium leading-tight text-foreground/90"
                 >
                   <span className={cn("break-words", isOG && "text-rose-500 font-semibold")}>
-                    {name} {e.minute}&apos;{tag}
-                    {!isOG && !isPen && e.assistPlayer?.name && (
+                    {name} {minText}{tag}
+                    {assistName && (
                       <span className="text-[9.5px] text-muted-foreground/80 font-normal">
-                        {" "}({e.assistPlayer.name})
+                        {" "}({assistName})
                       </span>
                     )}
                   </span>
@@ -397,6 +428,8 @@ export function MatchCard({
                 e.type === "OWN_GOAL" ||
                 (e.description && (e.description.toLowerCase().includes("own goal") || e.description.toLowerCase().includes("phản lưới")));
               const tag = isPen ? " (P)" : isOG ? " (OG)" : "";
+              const assistName = !isOG && !isPen ? getAssistName(e) : null;
+              const minText = formatEventMinute(e.minute, e.extraMinute);
 
               return (
                 <div
@@ -409,10 +442,10 @@ export function MatchCard({
                     <span className="text-[10px] sm:text-xs flex-shrink-0">⚽</span>
                   )}
                   <span className={cn("break-words", isOG && "text-rose-500 font-semibold")}>
-                    {name} {e.minute}&apos;{tag}
-                    {!isOG && !isPen && e.assistPlayer?.name && (
+                    {name} {minText}{tag}
+                    {assistName && (
                       <span className="text-[9.5px] text-muted-foreground/80 font-normal">
-                        {" "}({e.assistPlayer.name})
+                        {" "}({assistName})
                       </span>
                     )}
                   </span>

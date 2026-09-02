@@ -269,7 +269,18 @@ export async function fetchAndSyncLiveMatchDetail(matchId: string) {
         else if (typeText.includes("sub") || typeText.includes("substitution")) type = EventType.SUBSTITUTION;
         else continue;
 
-        const minute = parseInt(ke.clock?.displayValue?.replace(/[^0-9]/g, "") || `${ke.period?.number ? ke.period.number * 45 : 0}`, 10) || 1;
+        // Minute calculation (hỗ trợ phút bù giờ 45'+3', 90'+5', v.v...)
+        let minute = 1;
+        let extraMinute: number | null = null;
+        const clockStr = ke.clock?.displayValue || "";
+        const plusMatch = clockStr.match(/(\d+)\s*['’]?\s*\+\s*(\d+)/);
+        if (plusMatch) {
+          minute = parseInt(plusMatch[1], 10);
+          extraMinute = parseInt(plusMatch[2], 10);
+        } else {
+          const matchNum = clockStr.match(/(\d+)/);
+          minute = matchNum ? parseInt(matchNum[1], 10) : (ke.period?.number ? ke.period.number * 45 : 1);
+        }
         const teamId = ke.team?.id === hComp?.id ? match.homeTeamId : match.awayTeamId;
 
         // 1. Scorer / Main Player
@@ -343,6 +354,7 @@ export async function fetchAndSyncLiveMatchDetail(matchId: string) {
             assistPlayerId,
             type,
             minute,
+            extraMinute,
             description: ke.text || ke.shortText || null,
           },
         });

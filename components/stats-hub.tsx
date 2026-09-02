@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { PlayerSeasonStatItem, League } from "@/types/football";
+import { PlayerSeasonStatItem, TeamDisciplineItem, League } from "@/types/football";
 import {
   getTopScorers,
   getTopAssists,
   getTopCleanSheets,
-  getDisciplineStats,
+  getTeamDisciplineStats,
 } from "@/lib/actions/stats";
 import { SeasonSelector } from "@/components/season-selector";
 import { cn, getCountryFlagUrl } from "@/lib/utils";
@@ -40,6 +40,7 @@ export function StatsHub({
   const [selectedSeason, setSelectedSeason] = useState<string>("2026/2027");
   const [category, setCategory] = useState<StatCategory>("SCORERS");
   const [stats, setStats] = useState<PlayerSeasonStatItem[]>([]);
+  const [teamDisciplineStats, setTeamDisciplineStats] = useState<TeamDisciplineItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   const handleSelectLeague = (code: string) => {
@@ -61,24 +62,31 @@ export function StatsHub({
     let isMounted = true;
 
     const fetchStats = async () => {
-      let data: PlayerSeasonStatItem[] = [];
-      switch (category) {
-        case "SCORERS":
-          data = await getTopScorers(selectedLeague, 20, selectedSeason);
-          break;
-        case "ASSISTS":
-          data = await getTopAssists(selectedLeague, 20, selectedSeason);
-          break;
-        case "CLEAN_SHEETS":
-          data = await getTopCleanSheets(selectedLeague, 20, selectedSeason);
-          break;
-        case "DISCIPLINE":
-          data = await getDisciplineStats(selectedLeague, 20, selectedSeason);
-          break;
-      }
-      if (isMounted) {
-        setStats(data);
-        setLoading(false);
+      if (category === "DISCIPLINE") {
+        const teamData = await getTeamDisciplineStats(selectedLeague, selectedSeason);
+        if (isMounted) {
+          setTeamDisciplineStats(teamData);
+          setStats([]);
+          setLoading(false);
+        }
+      } else {
+        let data: PlayerSeasonStatItem[] = [];
+        switch (category) {
+          case "SCORERS":
+            data = await getTopScorers(selectedLeague, 20, selectedSeason);
+            break;
+          case "ASSISTS":
+            data = await getTopAssists(selectedLeague, 20, selectedSeason);
+            break;
+          case "CLEAN_SHEETS":
+            data = await getTopCleanSheets(selectedLeague, 20, selectedSeason);
+            break;
+        }
+        if (isMounted) {
+          setStats(data);
+          setTeamDisciplineStats([]);
+          setLoading(false);
+        }
       }
     };
 
@@ -92,9 +100,14 @@ export function StatsHub({
   const currentLeague = leagues.find((l) => l.code === selectedLeague);
 
   // Top 3 Podium
-  const top1 = stats[0];
-  const top2 = stats[1];
-  const top3 = stats[2];
+  const isDiscipline = category === "DISCIPLINE";
+  const top1Player = stats[0];
+  const top2Player = stats[1];
+  const top3Player = stats[2];
+
+  const top1Team = teamDisciplineStats[0];
+  const top2Team = teamDisciplineStats[1];
+  const top3Team = teamDisciplineStats[2];
 
   const getCategoryTitle = () => {
     switch (category) {
@@ -105,7 +118,7 @@ export function StatsHub({
       case "CLEAN_SHEETS":
         return "Thủ Môn Giữ Sạch Lưới Xuất Sắc (Clean Sheets)";
       case "DISCIPLINE":
-        return "Thống Kê Thẻ Phạt & Kỷ Luật (Discipline Hub)";
+        return "Thống Kê Thẻ Phạt & Kỷ Luật CLB (Discipline Hub)";
     }
   };
 
@@ -117,8 +130,8 @@ export function StatsHub({
         return item.assists;
       case "CLEAN_SHEETS":
         return item.cleanSheets;
-      case "DISCIPLINE":
-        return item.yellowCards + item.redCards * 3;
+      default:
+        return 0;
     }
   };
 
@@ -271,7 +284,7 @@ export function StatsHub({
             />
 
             <div className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 whitespace-nowrap">
-              {stats.length} Cầu thủ
+              {isDiscipline ? `${teamDisciplineStats.length} Câu lạc bộ` : `${stats.length} Cầu thủ`}
             </div>
           </div>
         </div>
@@ -281,322 +294,514 @@ export function StatsHub({
             <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
             <p className="text-xs font-bold">Đang tải số liệu thống kê...</p>
           </div>
-        ) : stats.length === 0 ? (
+        ) : (isDiscipline ? teamDisciplineStats.length === 0 : stats.length === 0) ? (
           <div className="py-12 text-center text-muted-foreground text-sm font-medium">
             Chưa có số liệu thống kê cho hạng mục này.
           </div>
         ) : (
           <>
-            {/* Top 3 Podium (Vinh danh Top 3) */}
-            {top1 && (
-              <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-4 pb-2 items-end">
-                {/* Top 2 (Silver) */}
-                {top2 ? (
-                  <div
-                    onClick={() => onSelectPlayer?.(top2.playerId)}
-                    className="flex flex-col items-center p-3 sm:p-4 rounded-2xl bg-secondary/50 border border-border/70 text-center relative group hover:border-slate-400 transition-colors cursor-pointer"
-                    title={`Xem hồ sơ ${top2.player.name}`}
-                  >
-                    <div className="w-6 h-6 rounded-full bg-slate-300 text-slate-800 text-xs font-black flex items-center justify-center mb-2 shadow-xs">
-                      2
-                    </div>
-                    <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-slate-300 shadow-md bg-white mb-2 group-hover:scale-105 transition-transform">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={top2.player.avatar || "/placeholder.png"}
-                        alt={top2.player.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = "none";
-                        }}
-                      />
-                    </div>
-                    <h3 className="font-extrabold text-xs sm:text-sm text-foreground group-hover:text-emerald-500 transition-colors truncate max-w-full">
-                      {top2.player.shortName || top2.player.name}
-                    </h3>
+            {/* Top 3 Podium */}
+            {isDiscipline ? (
+              top1Team && (
+                <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-4 pb-2 items-end">
+                  {/* Top 2 Team (Silver) */}
+                  {top2Team ? (
                     <div
-                      onClick={(e) => {
-                        if (onSelectTeam) {
-                          e.stopPropagation();
-                          onSelectTeam(top2.player.teamId);
-                        }
-                      }}
-                      className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground hover:text-emerald-500 transition-colors cursor-pointer"
+                      onClick={() => onSelectTeam?.(top2Team.teamId)}
+                      className="flex flex-col items-center p-3 sm:p-4 rounded-2xl bg-secondary/50 border border-border/70 text-center relative group hover:border-slate-400 transition-colors cursor-pointer"
+                      title={`Xem CLB ${top2Team.team.name}`}
                     >
+                      <div className="w-6 h-6 rounded-full bg-slate-300 text-slate-800 text-xs font-black flex items-center justify-center mb-2 shadow-xs">
+                        2
+                      </div>
+                      <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-2xl p-2 bg-white border border-slate-300 shadow-md mb-2 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={top2Team.team.logo}
+                          alt={top2Team.team.name}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <h3 className="font-extrabold text-xs sm:text-sm text-foreground group-hover:text-emerald-500 transition-colors truncate max-w-full">
+                        {top2Team.team.name}
+                      </h3>
+                      <div className="mt-2 font-mono font-black text-base sm:text-xl text-foreground">
+                        {top2Team.points} <span className="text-xs font-normal text-muted-foreground">pts</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground mt-0.5">
+                        <span className="text-amber-500">{top2Team.yellowCards}🟨</span>
+                        {top2Team.redCards > 0 && <span className="text-rose-500">{top2Team.redCards}🟥</span>}
+                      </div>
+                    </div>
+                  ) : <div />}
+
+                  {/* Top 1 Team (Gold) */}
+                  <div
+                    onClick={() => onSelectTeam?.(top1Team.teamId)}
+                    className="flex flex-col items-center p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-b from-amber-500/15 via-amber-500/5 to-card border-2 border-amber-400/70 text-center relative shadow-lg shadow-amber-500/10 -translate-y-2 group cursor-pointer"
+                    title={`Xem CLB ${top1Team.team.name}`}
+                  >
+                    <div className="w-7 h-7 rounded-full bg-amber-400 text-amber-950 text-xs font-black flex items-center justify-center mb-2 shadow-md animate-bounce">
+                      👑 1
+                    </div>
+                    <div className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl p-2.5 bg-white border-3 border-amber-400 shadow-xl mb-2 flex items-center justify-center group-hover:scale-105 transition-transform">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={top2.player.team.logo}
-                        alt={top2.player.team.name}
-                        className="w-3.5 h-3.5 object-contain"
+                        src={top1Team.team.logo}
+                        alt={top1Team.team.name}
+                        className="w-full h-full object-contain"
                       />
-                      <span className="truncate">{top2.player.team.shortName}</span>
                     </div>
-                    <div className="mt-2 font-mono font-black text-base sm:text-xl text-foreground">
-                      {getMainStatValue(top2)}
+                    <h3 className="font-black text-xs sm:text-base text-foreground group-hover:text-amber-500 transition-colors truncate max-w-full">
+                      {top1Team.team.name}
+                    </h3>
+                    <div className="mt-2 font-mono font-black text-xl sm:text-3xl text-amber-500">
+                      {top1Team.points} <span className="text-xs font-bold text-muted-foreground">điểm</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground mt-0.5">
+                      <span className="text-amber-500">{top1Team.yellowCards}🟨</span>
+                      {top1Team.redCards > 0 && <span className="text-rose-500">{top1Team.redCards}🟥</span>}
+                      <span>• {top1Team.cardedPlayers.length} cầu thủ</span>
                     </div>
                   </div>
-                ) : (
-                  <div />
-                )}
 
-                {/* Top 1 (Gold) */}
-                <div
-                  onClick={() => onSelectPlayer?.(top1.playerId)}
-                  className="flex flex-col items-center p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-b from-amber-500/15 via-amber-500/5 to-card border-2 border-amber-400/70 text-center relative shadow-lg shadow-amber-500/10 -translate-y-2 group cursor-pointer"
-                  title={`Xem hồ sơ ${top1.player.name}`}
-                >
-                  <div className="w-7 h-7 rounded-full bg-amber-400 text-amber-950 text-xs font-black flex items-center justify-center mb-2 shadow-md animate-bounce">
-                    👑 1
-                  </div>
-                  <div className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden border-3 border-amber-400 shadow-xl bg-white mb-2 group-hover:scale-105 transition-transform">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={top1.player.avatar || "/placeholder.png"}
-                      alt={top1.player.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = "none";
-                      }}
-                    />
-                  </div>
-                  <h3 className="font-black text-xs sm:text-base text-foreground group-hover:text-amber-500 transition-colors truncate max-w-full">
-                    {top1.player.name}
-                  </h3>
-                  <div
-                    onClick={(e) => {
-                      if (onSelectTeam) {
-                        e.stopPropagation();
-                        onSelectTeam(top1.player.teamId);
-                      }
-                    }}
-                    className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground font-semibold hover:text-emerald-500 transition-colors cursor-pointer"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={top1.player.team.logo}
-                      alt={top1.player.team.name}
-                      className="w-4 h-4 object-contain"
-                    />
-                    <span className="truncate">{top1.player.team.name}</span>
-                  </div>
-                  <div className="mt-2 font-mono font-black text-xl sm:text-3xl text-amber-500">
-                    {getMainStatValue(top1)}
-                  </div>
-                  <span className="text-[10px] text-muted-foreground font-bold">
-                    {getMainStatLabel()}
-                  </span>
+                  {/* Top 3 Team (Bronze) */}
+                  {top3Team ? (
+                    <div
+                      onClick={() => onSelectTeam?.(top3Team.teamId)}
+                      className="flex flex-col items-center p-3 sm:p-4 rounded-2xl bg-secondary/50 border border-border/70 text-center relative group hover:border-amber-700/50 transition-colors cursor-pointer"
+                      title={`Xem CLB ${top3Team.team.name}`}
+                    >
+                      <div className="w-6 h-6 rounded-full bg-amber-700 text-amber-100 text-xs font-black flex items-center justify-center mb-2 shadow-xs">
+                        3
+                      </div>
+                      <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-2xl p-2 bg-white border-2 border-amber-700/60 shadow-md mb-2 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={top3Team.team.logo}
+                          alt={top3Team.team.name}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <h3 className="font-extrabold text-xs sm:text-sm text-foreground group-hover:text-emerald-500 transition-colors truncate max-w-full">
+                        {top3Team.team.name}
+                      </h3>
+                      <div className="mt-2 font-mono font-black text-base sm:text-xl text-foreground">
+                        {top3Team.points} <span className="text-xs font-normal text-muted-foreground">pts</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground mt-0.5">
+                        <span className="text-amber-500">{top3Team.yellowCards}🟨</span>
+                        {top3Team.redCards > 0 && <span className="text-rose-500">{top3Team.redCards}🟥</span>}
+                      </div>
+                    </div>
+                  ) : <div />}
                 </div>
-
-                {/* Top 3 (Bronze) */}
-                {top3 ? (
-                  <div
-                    onClick={() => onSelectPlayer?.(top3.playerId)}
-                    className="flex flex-col items-center p-3 sm:p-4 rounded-2xl bg-secondary/50 border border-border/70 text-center relative group hover:border-amber-700/50 transition-colors cursor-pointer"
-                    title={`Xem hồ sơ ${top3.player.name}`}
-                  >
-                    <div className="w-6 h-6 rounded-full bg-amber-700 text-amber-100 text-xs font-black flex items-center justify-center mb-2 shadow-xs">
-                      3
+              )
+            ) : (
+              top1Player && (
+                <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-4 pb-2 items-end">
+                  {/* Top 2 Player (Silver) */}
+                  {top2Player ? (
+                    <div
+                      onClick={() => onSelectPlayer?.(top2Player.playerId)}
+                      className="flex flex-col items-center p-3 sm:p-4 rounded-2xl bg-secondary/50 border border-border/70 text-center relative group hover:border-slate-400 transition-colors cursor-pointer"
+                      title={`Xem hồ sơ ${top2Player.player.name}`}
+                    >
+                      <div className="w-6 h-6 rounded-full bg-slate-300 text-slate-800 text-xs font-black flex items-center justify-center mb-2 shadow-xs">
+                        2
+                      </div>
+                      <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-slate-300 shadow-md bg-white mb-2 group-hover:scale-105 transition-transform">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={top2Player.player.avatar || "/placeholder.png"}
+                          alt={top2Player.player.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                      <h3 className="font-extrabold text-xs sm:text-sm text-foreground group-hover:text-emerald-500 transition-colors truncate max-w-full">
+                        {top2Player.player.shortName || top2Player.player.name}
+                      </h3>
+                      <div
+                        onClick={(e) => {
+                          if (onSelectTeam) {
+                            e.stopPropagation();
+                            onSelectTeam(top2Player.player.teamId);
+                          }
+                        }}
+                        className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground hover:text-emerald-500 transition-colors cursor-pointer"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={top2Player.player.team.logo}
+                          alt={top2Player.player.team.name}
+                          className="w-3.5 h-3.5 object-contain"
+                        />
+                        <span className="truncate">{top2Player.player.team.shortName}</span>
+                      </div>
+                      <div className="mt-2 font-mono font-black text-base sm:text-xl text-foreground">
+                        {getMainStatValue(top2Player)}
+                      </div>
                     </div>
-                    <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-amber-700/60 shadow-md bg-white mb-2 group-hover:scale-105 transition-transform">
+                  ) : <div />}
+
+                  {/* Top 1 Player (Gold) */}
+                  <div
+                    onClick={() => onSelectPlayer?.(top1Player.playerId)}
+                    className="flex flex-col items-center p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-gradient-to-b from-amber-500/15 via-amber-500/5 to-card border-2 border-amber-400/70 text-center relative shadow-lg shadow-amber-500/10 -translate-y-2 group cursor-pointer"
+                    title={`Xem hồ sơ ${top1Player.player.name}`}
+                  >
+                    <div className="w-7 h-7 rounded-full bg-amber-400 text-amber-950 text-xs font-black flex items-center justify-center mb-2 shadow-md animate-bounce">
+                      👑 1
+                    </div>
+                    <div className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden border-3 border-amber-400 shadow-xl bg-white mb-2 group-hover:scale-105 transition-transform">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={top3.player.avatar || "/placeholder.png"}
-                        alt={top3.player.name}
+                        src={top1Player.player.avatar || "/placeholder.png"}
+                        alt={top1Player.player.name}
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           (e.target as HTMLElement).style.display = "none";
                         }}
                       />
                     </div>
-                    <h3 className="font-extrabold text-xs sm:text-sm text-foreground group-hover:text-emerald-500 transition-colors truncate max-w-full">
-                      {top3.player.shortName || top3.player.name}
+                    <h3 className="font-black text-xs sm:text-base text-foreground group-hover:text-amber-500 transition-colors truncate max-w-full">
+                      {top1Player.player.name}
                     </h3>
                     <div
                       onClick={(e) => {
                         if (onSelectTeam) {
                           e.stopPropagation();
-                          onSelectTeam(top3.player.teamId);
+                          onSelectTeam(top1Player.player.teamId);
                         }
                       }}
-                      className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground hover:text-emerald-500 transition-colors cursor-pointer"
+                      className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground font-semibold hover:text-emerald-500 transition-colors cursor-pointer"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={top3.player.team.logo}
-                        alt={top3.player.team.name}
-                        className="w-3.5 h-3.5 object-contain"
+                        src={top1Player.player.team.logo}
+                        alt={top1Player.player.team.name}
+                        className="w-4 h-4 object-contain"
                       />
-                      <span className="truncate">{top3.player.team.shortName}</span>
+                      <span className="truncate">{top1Player.player.team.name}</span>
                     </div>
-                    <div className="mt-2 font-mono font-black text-base sm:text-xl text-foreground">
-                      {getMainStatValue(top3)}
+                    <div className="mt-2 font-mono font-black text-xl sm:text-3xl text-amber-500">
+                      {getMainStatValue(top1Player)}
                     </div>
+                    <span className="text-[10px] text-muted-foreground font-bold">
+                      {getMainStatLabel()}
+                    </span>
                   </div>
-                ) : (
-                  <div />
-                )}
-              </div>
+
+                  {/* Top 3 Player (Bronze) */}
+                  {top3Player ? (
+                    <div
+                      onClick={() => onSelectPlayer?.(top3Player.playerId)}
+                      className="flex flex-col items-center p-3 sm:p-4 rounded-2xl bg-secondary/50 border border-border/70 text-center relative group hover:border-amber-700/50 transition-colors cursor-pointer"
+                      title={`Xem hồ sơ ${top3Player.player.name}`}
+                    >
+                      <div className="w-6 h-6 rounded-full bg-amber-700 text-amber-100 text-xs font-black flex items-center justify-center mb-2 shadow-xs">
+                        3
+                      </div>
+                      <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-amber-700/60 shadow-md bg-white mb-2 group-hover:scale-105 transition-transform">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={top3Player.player.avatar || "/placeholder.png"}
+                          alt={top3Player.player.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                      <h3 className="font-extrabold text-xs sm:text-sm text-foreground group-hover:text-emerald-500 transition-colors truncate max-w-full">
+                        {top3Player.player.shortName || top3Player.player.name}
+                      </h3>
+                      <div
+                        onClick={(e) => {
+                          if (onSelectTeam) {
+                            e.stopPropagation();
+                            onSelectTeam(top3Player.player.teamId);
+                          }
+                        }}
+                        className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground hover:text-emerald-500 transition-colors cursor-pointer"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={top3Player.player.team.logo}
+                          alt={top3Player.player.team.name}
+                          className="w-3.5 h-3.5 object-contain"
+                        />
+                        <span className="truncate">{top3Player.player.team.shortName}</span>
+                      </div>
+                      <div className="mt-2 font-mono font-black text-base sm:text-xl text-foreground">
+                        {getMainStatValue(top3Player)}
+                      </div>
+                    </div>
+                  ) : <div />}
+                </div>
+              )
             )}
 
             {/* 4. Detailed Ranking Table */}
             <div className="w-full overflow-x-auto pt-2">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead>
-                  <tr className="text-muted-foreground font-black text-[10px] sm:text-xs uppercase border-b border-border/50 pb-2">
-                    <th className="py-2.5 px-2 w-10 text-center">#</th>
-                    <th className="py-2.5 px-2">Cầu thủ</th>
-                    <th className="py-2.5 px-2">Câu Lạc Bộ</th>
-                    <th className="py-2.5 px-2 text-center w-14 sm:w-20">Trận</th>
-                    <th className="py-2.5 px-2 text-center w-16 sm:w-24 font-black text-foreground">
-                      {category === "SCORERS"
-                        ? "Bàn thắng"
-                        : category === "ASSISTS"
-                        ? "Kiến tạo"
-                        : category === "CLEAN_SHEETS"
-                        ? "Sạch lưới"
-                        : "Thẻ vàng/đỏ"}
-                    </th>
-                    {category === "SCORERS" && (
-                      <>
-                        <th className="py-2.5 px-2 text-center w-14 sm:w-20 hidden sm:table-cell">Penalty</th>
-                        <th className="py-2.5 px-2 text-center w-20 sm:w-28 hidden sm:table-cell">Phút/Bàn</th>
-                      </>
-                    )}
-                    {category === "ASSISTS" && (
-                      <th className="py-2.5 px-2 text-center w-20 sm:w-28 hidden sm:table-cell">Tạo cơ hội</th>
-                    )}
-                    {category === "CLEAN_SHEETS" && (
-                      <th className="py-2.5 px-2 text-center w-20 sm:w-28 hidden sm:table-cell">Cứu thua</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30 font-medium">
-                  {stats.map((item, index) => {
-                    const minsPerGoal =
-                      item.goals > 0 ? Math.round(item.minutesPlayed / item.goals) : 0;
+              {isDiscipline ? (
+                /* Team Discipline Table */
+                <table className="w-full text-left text-xs sm:text-sm">
+                  <thead>
+                    <tr className="text-muted-foreground font-black text-[10px] sm:text-xs uppercase border-b border-border/50 pb-2">
+                      <th className="py-2.5 px-2 w-10 text-center">#</th>
+                      <th className="py-2.5 px-2 min-w-[140px] sm:min-w-[180px]">Câu Lạc Bộ</th>
+                      <th className="py-2.5 px-2 text-center w-12 sm:w-16">Trận</th>
+                      <th className="py-2.5 px-2 text-center w-14 sm:w-16">Thẻ vàng</th>
+                      <th className="py-2.5 px-2 text-center w-14 sm:w-16">Thẻ đỏ</th>
+                      <th className="py-2.5 px-2 text-center w-16 sm:w-20 font-black text-foreground">Điểm</th>
+                      <th className="py-2.5 px-2 min-w-[200px]">Cầu thủ nhận thẻ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30 font-medium">
+                    {(() => {
+                      let currentRank = 1;
+                      return teamDisciplineStats.map((item, index) => {
+                        if (index > 0) {
+                          const prevVal = teamDisciplineStats[index - 1].points;
+                          const currVal = item.points;
+                          if (currVal < prevVal) {
+                            currentRank = index + 1;
+                          }
+                        }
+                        const rank = currentRank;
 
-                    return (
-                      <tr
-                        key={item.id}
-                        onClick={() => onSelectPlayer?.(item.playerId)}
-                        className="hover:bg-secondary/60 transition-colors group cursor-pointer"
-                        title={`Xem hồ sơ ${item.player.name}`}
-                      >
-                        {/* Rank */}
-                        <td className="py-2.5 px-2 text-center">
-                          <span
-                            className={cn(
-                              "inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full font-black text-[10px] sm:text-xs",
-                              index === 0
-                                ? "bg-amber-400 text-amber-950 font-extrabold"
-                                : index === 1
-                                ? "bg-slate-300 text-slate-900 font-bold"
-                                : index === 2
-                                ? "bg-amber-700 text-amber-100 font-bold"
-                                : "bg-secondary text-muted-foreground"
-                            )}
+                        return (
+                          <tr
+                            key={item.id}
+                            onClick={() => onSelectTeam?.(item.teamId)}
+                            className="hover:bg-secondary/60 transition-colors group cursor-pointer"
+                            title={`Xem chi tiết CLB ${item.team.name}`}
                           >
-                            {index + 1}
-                          </span>
-                        </td>
-
-                        {/* Player */}
-                        <td className="py-2.5 px-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden bg-white border border-border/80 flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={item.player.avatar || "/placeholder.png"}
-                                alt={item.player.name}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  (e.target as HTMLElement).style.display = "none";
-                                }}
-                              />
-                            </div>
-                            <div className="truncate">
-                              <p className="font-bold text-foreground group-hover:text-emerald-500 transition-colors truncate">
-                                {item.player.name}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground">
-                                #{item.player.number || "-"} • {item.player.position}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Team */}
-                        <td
-                          className="py-2.5 px-2"
-                          onClick={(e) => {
-                            if (onSelectTeam) {
-                              e.stopPropagation();
-                              onSelectTeam(item.player.teamId);
-                            }
-                          }}
-                        >
-                          <div className="flex items-center gap-1.5 truncate hover:text-emerald-500 transition-colors">
-                            <div className="w-5 h-5 rounded-md bg-white p-0.5 flex items-center justify-center flex-shrink-0 shadow-2xs border border-black/10">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={item.player.team.logo}
-                                alt={item.player.team.name}
-                                className="w-full h-full object-contain"
-                              />
-                            </div>
-                            <span className="text-muted-foreground font-semibold truncate group-hover:text-foreground">
-                              {item.player.team.name}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Appearances */}
-                        <td className="py-2.5 px-2 text-center text-muted-foreground font-semibold">
-                          {item.appearances}
-                        </td>
-
-                        {/* Main Stat */}
-                        <td className="py-2.5 px-2 text-center font-mono font-black text-sm sm:text-base text-foreground">
-                          {category === "DISCIPLINE" ? (
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span className="text-amber-500 font-bold">{item.yellowCards}🟨</span>
-                              {item.redCards > 0 && (
-                                <span className="text-rose-500 font-bold">{item.redCards}🟥</span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-emerald-500">
-                              {getMainStatValue(item)}
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Sub Stats */}
-                        {category === "SCORERS" && (
-                          <>
-                            <td className="py-2.5 px-2 text-center text-muted-foreground font-semibold hidden sm:table-cell">
-                              {item.penalties}
+                            {/* Rank */}
+                            <td className="py-2.5 px-2 text-center">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full font-black text-[10px] sm:text-xs",
+                                  rank === 1
+                                    ? "bg-amber-400 text-amber-950 font-extrabold"
+                                    : rank === 2
+                                    ? "bg-slate-300 text-slate-900 font-bold"
+                                    : rank === 3
+                                    ? "bg-amber-700 text-amber-100 font-bold"
+                                    : "bg-secondary text-muted-foreground"
+                                )}
+                              >
+                                {rank}
+                              </span>
                             </td>
-                            <td className="py-2.5 px-2 text-center text-muted-foreground font-mono hidden sm:table-cell">
-                              {minsPerGoal > 0 ? `${minsPerGoal}'` : "-"}
+
+                            {/* Club */}
+                            <td className="py-2.5 px-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-white p-0.5 flex items-center justify-center flex-shrink-0 shadow-2xs border border-black/10">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={item.team.logo}
+                                    alt={item.team.name}
+                                    className="w-full h-full object-contain"
+                                  />
+                                </div>
+                                <span className="font-bold text-foreground group-hover:text-emerald-500 transition-colors truncate">
+                                  {item.team.name}
+                                </span>
+                              </div>
                             </td>
-                          </>
-                        )}
-                        {category === "ASSISTS" && (
-                          <td className="py-2.5 px-2 text-center text-muted-foreground font-semibold hidden sm:table-cell">
-                            {item.chancesCreated}
-                          </td>
-                        )}
-                        {category === "CLEAN_SHEETS" && (
-                          <td className="py-2.5 px-2 text-center text-muted-foreground font-semibold hidden sm:table-cell">
-                            {item.saves}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+
+                            {/* Appearances */}
+                            <td className="py-2.5 px-2 text-center text-muted-foreground font-semibold">
+                              {item.appearances}
+                            </td>
+
+                            {/* Yellow Cards */}
+                            <td className="py-2.5 px-2 text-center font-bold text-amber-500">
+                              {item.yellowCards}🟨
+                            </td>
+
+                            {/* Red Cards */}
+                            <td className="py-2.5 px-2 text-center font-bold text-rose-500">
+                              {item.redCards > 0 ? `${item.redCards}🟥` : "0"}
+                            </td>
+
+                            {/* Discipline Points */}
+                            <td className="py-2.5 px-2 text-center font-mono font-black text-sm sm:text-base text-foreground">
+                              {item.points}
+                            </td>
+
+                            {/* Carded Players List */}
+                            <td className="py-2 px-2" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex flex-wrap items-center gap-1.5 py-0.5">
+                                {item.cardedPlayers.length > 0 ? (
+                                  item.cardedPlayers.map((p) => (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      onClick={() => onSelectPlayer?.(p.id)}
+                                      className="inline-flex items-center gap-1 bg-secondary/80 hover:bg-secondary hover:border-emerald-500/50 border border-border/70 px-2 py-0.5 rounded-lg text-[11px] font-semibold text-foreground hover:text-emerald-500 transition-all cursor-pointer shadow-2xs"
+                                      title={`Xem hồ sơ ${p.name}`}
+                                    >
+                                      <span className="truncate max-w-[110px] sm:max-w-[140px]">{p.shortName || p.name}</span>
+                                      {p.yellowCards > 0 && (
+                                        <span className="text-amber-500 font-bold">{p.yellowCards}🟨</span>
+                                      )}
+                                      {p.redCards > 0 && (
+                                        <span className="text-rose-500 font-bold">{p.redCards}🟥</span>
+                                      )}
+                                    </button>
+                                  ))
+                                ) : (
+                                  <span className="text-muted-foreground text-xs italic">Không có thẻ</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              ) : (
+                /* Player Statistics Table (Scorers, Assists, Clean Sheets) */
+                <table className="w-full text-left text-xs sm:text-sm">
+                  <thead>
+                    <tr className="text-muted-foreground font-black text-[10px] sm:text-xs uppercase border-b border-border/50 pb-2">
+                      <th className="py-2.5 px-2 w-10 text-center">#</th>
+                      <th className="py-2.5 px-2">Cầu thủ</th>
+                      <th className="py-2.5 px-2">Câu Lạc Bộ</th>
+                      <th className="py-2.5 px-2 text-center w-14 sm:w-20">Trận</th>
+                      <th className="py-2.5 px-2 text-center w-16 sm:w-24 font-black text-foreground">
+                        {category === "SCORERS"
+                          ? "Bàn thắng"
+                          : category === "ASSISTS"
+                          ? "Kiến tạo"
+                          : "Sạch lưới"}
+                      </th>
+                      {category === "SCORERS" && (
+                        <th className="py-2.5 px-2 text-center w-16 sm:w-20 hidden sm:table-cell">Penalty</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30 font-medium">
+                    {(() => {
+                      let currentRank = 1;
+                      return stats.map((item, index) => {
+                        if (index > 0) {
+                          const prevVal = getMainStatValue(stats[index - 1]);
+                          const currVal = getMainStatValue(item);
+                          if (currVal < prevVal) {
+                            currentRank = index + 1;
+                          }
+                        }
+                        const rank = currentRank;
+
+                        return (
+                          <tr
+                            key={item.id}
+                            onClick={() => onSelectPlayer?.(item.playerId)}
+                            className="hover:bg-secondary/60 transition-colors group cursor-pointer"
+                            title={`Xem hồ sơ ${item.player.name}`}
+                          >
+                            {/* Rank */}
+                            <td className="py-2.5 px-2 text-center">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full font-black text-[10px] sm:text-xs",
+                                  rank === 1
+                                    ? "bg-amber-400 text-amber-950 font-extrabold"
+                                    : rank === 2
+                                    ? "bg-slate-300 text-slate-900 font-bold"
+                                    : rank === 3
+                                    ? "bg-amber-700 text-amber-100 font-bold"
+                                    : "bg-secondary text-muted-foreground"
+                                )}
+                              >
+                                {rank}
+                              </span>
+                            </td>
+
+                            {/* Player */}
+                            <td className="py-2.5 px-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden bg-white border border-border/80 flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={item.player.avatar || "/placeholder.png"}
+                                    alt={item.player.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = "none";
+                                    }}
+                                  />
+                                </div>
+                                <div className="truncate">
+                                  <p className="font-bold text-foreground group-hover:text-emerald-500 transition-colors truncate">
+                                    {item.player.name}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    #{item.player.number || "-"} • {item.player.position}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Team */}
+                            <td
+                              className="py-2.5 px-2"
+                              onClick={(e) => {
+                                if (onSelectTeam) {
+                                  e.stopPropagation();
+                                  onSelectTeam(item.player.teamId);
+                                }
+                              }}
+                            >
+                              <div className="flex items-center gap-1.5 truncate hover:text-emerald-500 transition-colors">
+                                <div className="w-5 h-5 rounded-md bg-white p-0.5 flex items-center justify-center flex-shrink-0 shadow-2xs border border-black/10">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={item.player.team.logo}
+                                    alt={item.player.team.name}
+                                    className="w-full h-full object-contain"
+                                  />
+                                </div>
+                                <span className="text-muted-foreground font-semibold truncate group-hover:text-foreground">
+                                  {item.player.team.name}
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Appearances */}
+                            <td className="py-2.5 px-2 text-center text-muted-foreground font-semibold">
+                              {item.appearances}
+                            </td>
+
+                            {/* Main Stat */}
+                            <td className="py-2.5 px-2 text-center font-mono font-black text-sm sm:text-base text-foreground">
+                              <span className="text-emerald-500">
+                                {getMainStatValue(item)}
+                              </span>
+                            </td>
+
+                            {/* Sub Stats - Only Penalty for SCORERS */}
+                            {category === "SCORERS" && (
+                              <td className="py-2.5 px-2 text-center text-muted-foreground font-semibold hidden sm:table-cell">
+                                {item.penalties || 0}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              )}
             </div>
           </>
         )}
@@ -604,3 +809,4 @@ export function StatsHub({
     </div>
   );
 }
+

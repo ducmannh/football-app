@@ -19,6 +19,22 @@ import { MatchDetailData, MatchEvent, MatchLineup, MatchItem } from "@/types/foo
 import { getClubManager } from "@/lib/services/club-managers";
 import { calculateTacticalFormationPositions } from "@/lib/services/tactical-pitch";
 
+export function formatEventMinute(minute: number, extraMinute?: number | null): string {
+  if (extraMinute != null && extraMinute > 0) {
+    return `${minute}'+${extraMinute}'`;
+  }
+  if (minute >= 451 && minute <= 459) {
+    return `45'+${minute - 450}'`;
+  }
+  if (minute >= 901 && minute <= 909) {
+    return `90'+${minute - 900}'`;
+  }
+  if (minute >= 1201 && minute <= 1209) {
+    return `120'+${minute - 1200}'`;
+  }
+  return `${minute}'`;
+}
+
 // Biểu tượng Bàn Phản Lưới Nhà (Quả bóng màu đỏ nổi bật phân biệt hoàn toàn với bàn thắng thông thường)
 function OwnGoalIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   return (
@@ -496,7 +512,7 @@ export function MatchDetailModal({
                         >
                           {/* Phút thi đấu */}
                           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center font-mono font-black text-xs text-emerald-600 dark:text-emerald-400 flex-shrink-0 shadow-2xs">
-                            {event.minute}&apos;
+                            {formatEventMinute(event.minute, event.extraMinute)}
                           </div>
 
                           {/* Biểu tượng */}
@@ -765,9 +781,9 @@ export function MatchDetailModal({
                             {pEvents.goals.length > 0 && (
                               <span
                                 className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-black text-[10px] flex-shrink-0 shadow-2xs"
-                                title={`Ghi ${pEvents.goals.length} bàn: ${pEvents.goals.map((g) => `${g.minute}'`).join(", ")}`}
+                                title={`Ghi ${pEvents.goals.length} bàn: ${pEvents.goals.map((g) => formatEventMinute(g.minute, g.extraMinute)).join(", ")}`}
                               >
-                                ⚽{pEvents.goals.length > 1 ? `x${pEvents.goals.length}` : ""} {pEvents.goals.map((g) => `${g.minute}'`).join(", ")}
+                                ⚽{pEvents.goals.length > 1 ? `x${pEvents.goals.length}` : ""} {pEvents.goals.map((g) => formatEventMinute(g.minute, g.extraMinute)).join(", ")}
                               </span>
                             )}
 
@@ -775,10 +791,10 @@ export function MatchDetailModal({
                             {pEvents.ownGoals.length > 0 && (
                               <span
                                 className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md bg-rose-500/15 border border-rose-500/35 text-rose-600 dark:text-rose-400 font-black text-[10px] flex-shrink-0 shadow-2xs"
-                                title={`Phản lưới nhà (OG): ${pEvents.ownGoals.map((o) => `Phút ${o.minute}'`).join(", ")}`}
+                                title={`Phản lưới nhà (OG): ${pEvents.ownGoals.map((o) => `Phút ${formatEventMinute(o.minute, o.extraMinute)}`).join(", ")}`}
                               >
                                 <OwnGoalIcon className="w-3 h-3" />
-                                <span>(OG) {pEvents.ownGoals.map((o) => `${o.minute}'`).join(", ")}</span>
+                                <span>(OG) {pEvents.ownGoals.map((o) => formatEventMinute(o.minute, o.extraMinute)).join(", ")}</span>
                               </span>
                             )}
 
@@ -786,9 +802,9 @@ export function MatchDetailModal({
                             {pEvents.assists.length > 0 && (
                               <span
                                 className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-md bg-teal-500/10 border border-teal-500/30 text-teal-600 dark:text-teal-400 font-black text-[10px] flex-shrink-0 shadow-2xs"
-                                title={`Kiến tạo ${pEvents.assists.length} lần: ${pEvents.assists.map((a) => `${a.minute}'`).join(", ")}`}
+                                title={`Kiến tạo ${pEvents.assists.length} lần: ${pEvents.assists.map((a) => formatEventMinute(a.minute, a.extraMinute)).join(", ")}`}
                               >
-                                👟{pEvents.assists.length > 1 ? `x${pEvents.assists.length}` : ""} {pEvents.assists.map((a) => `${a.minute}'`).join(", ")}
+                                👟{pEvents.assists.length > 1 ? `x${pEvents.assists.length}` : ""} {pEvents.assists.map((a) => formatEventMinute(a.minute, a.extraMinute)).join(", ")}
                               </span>
                             )}
 
@@ -796,9 +812,9 @@ export function MatchDetailModal({
                             {pEvents.yellowCards.length > 0 && (
                               <span
                                 className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/30 text-amber-500 font-bold text-[10px] flex-shrink-0 shadow-2xs"
-                                title={`Thẻ vàng: ${pEvents.yellowCards.map((y) => `Phút ${y.minute}'`).join(", ")}`}
+                                title={`Thẻ vàng: ${pEvents.yellowCards.map((y) => `Phút ${formatEventMinute(y.minute, y.extraMinute)}`).join(", ")}`}
                               >
-                                🟨 {pEvents.yellowCards.map((y) => `${y.minute}'`).join(", ")}
+                                🟨 {pEvents.yellowCards.map((y) => formatEventMinute(y.minute, y.extraMinute)).join(", ")}
                               </span>
                             )}
 
@@ -806,9 +822,9 @@ export function MatchDetailModal({
                             {pEvents.redCards.length > 0 && (
                               <span
                                 className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-rose-500/10 border border-rose-500/30 text-rose-500 font-bold text-[10px] flex-shrink-0 shadow-2xs"
-                                title={`Thẻ đỏ: ${pEvents.redCards.map((r) => `Phút ${r.minute}'`).join(", ")}`}
+                                title={`Thẻ đỏ: ${pEvents.redCards.map((r) => `Phút ${formatEventMinute(r.minute, r.extraMinute)}`).join(", ")}`}
                               >
-                                🟥 {pEvents.redCards.map((r) => `${r.minute}'`).join(", ")}
+                                🟥 {pEvents.redCards.map((r) => formatEventMinute(r.minute, r.extraMinute)).join(", ")}
                               </span>
                             )}
 
@@ -816,9 +832,9 @@ export function MatchDetailModal({
                             {!isBench && pEvents.subbedOut && (
                               <span
                                 className="inline-flex items-center gap-0.5 text-[9.5px] text-rose-500 font-bold bg-rose-500/10 border border-rose-500/25 px-1.5 py-0.2 rounded-full flex-shrink-0 whitespace-nowrap shadow-2xs"
-                                title={`Rời sân phút ${pEvents.subbedOut.minute}'`}
+                                title={`Rời sân phút ${formatEventMinute(pEvents.subbedOut.minute, pEvents.subbedOut.extraMinute)}`}
                               >
-                                🔄🔴 {pEvents.subbedOut.minute}&apos;
+                                🔄🔴 {formatEventMinute(pEvents.subbedOut.minute, pEvents.subbedOut.extraMinute)}
                               </span>
                             )}
 
@@ -826,9 +842,9 @@ export function MatchDetailModal({
                             {isBench && pEvents.subbedIn && (
                               <span
                                 className="inline-flex items-center gap-0.5 text-[9.5px] text-emerald-500 font-bold bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.2 rounded-full flex-shrink-0 whitespace-nowrap shadow-2xs"
-                                title={`Vào sân phút ${pEvents.subbedIn.minute}'`}
+                                title={`Vào sân phút ${formatEventMinute(pEvents.subbedIn.minute, pEvents.subbedIn.extraMinute)}`}
                               >
-                                🔄🟢 Vào sân {pEvents.subbedIn.minute}&apos;
+                                🔄🟢 Vào sân {formatEventMinute(pEvents.subbedIn.minute, pEvents.subbedIn.extraMinute)}
                               </span>
                             )}
                           </div>
@@ -931,12 +947,12 @@ export function MatchDetailModal({
                                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 sm:w-36 sm:h-36 border-2 border-white/40 rounded-full pointer-events-none" />
                                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-white/70 rounded-full pointer-events-none" />
 
-                                {/* Top Goal Area (Away) */}
+                                {/* Top Goal Area (Home) */}
                                 <div className="absolute top-2 sm:top-3 left-[20%] right-[20%] h-16 sm:h-24 border-b-2 border-l-2 border-r-2 border-white/40 rounded-b-2xl pointer-events-none" />
                                 <div className="absolute top-2 sm:top-3 left-[34%] right-[34%] h-8 sm:h-12 border-b-2 border-l-2 border-r-2 border-white/40 rounded-b-xl pointer-events-none" />
                                 <div className="absolute top-[18%] left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-white/60 rounded-full pointer-events-none" />
 
-                                {/* Bottom Goal Area (Home) */}
+                                {/* Bottom Goal Area (Away) */}
                                 <div className="absolute bottom-2 sm:bottom-3 left-[20%] right-[20%] h-16 sm:h-24 border-t-2 border-l-2 border-r-2 border-white/40 rounded-t-2xl pointer-events-none" />
                                 <div className="absolute bottom-2 sm:bottom-3 left-[34%] right-[34%] h-8 sm:h-12 border-t-2 border-l-2 border-r-2 border-white/40 rounded-t-xl pointer-events-none" />
                                 <div className="absolute bottom-[18%] left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-white/60 rounded-full pointer-events-none" />
@@ -1011,7 +1027,7 @@ export function MatchDetailModal({
 
                                   if (isPitchVertical) {
                                     posX = rawY; // Cánh trái (LB/LW) luôn ở bên trái (15..22%), Cánh phải (RB/RW) luôn ở bên phải (78..85%)
-                                    posY = 100 - rawX; // Đội nhà ở nửa dưới (93% -> 56%), Đội khách ở nửa trên (7% -> 44%)
+                                    posY = rawX; // Đội chủ nhà ở nửa trên (5% -> 44%), Đội khách ở nửa dưới (56% -> 95%)
                                   }
 
                                   const pEvents = getPlayerEvents(lineup.playerId, lineup.player?.name);
@@ -1054,10 +1070,10 @@ export function MatchDetailModal({
                                         {subbedOut && (
                                           <div
                                             className="absolute -top-1.5 -left-2 px-1.5 py-0.2 rounded-full bg-rose-600 border border-white flex items-center justify-center text-[7.5px] sm:text-[9px] text-white shadow-md z-20 font-black gap-0.5"
-                                            title={`Rời sân phút ${subbedOut.minute}'`}
+                                            title={`Rời sân phút ${formatEventMinute(subbedOut.minute, subbedOut.extraMinute)}`}
                                           >
                                             <span>🔄</span>
-                                            <span>{subbedOut.minute}&apos;</span>
+                                            <span>{formatEventMinute(subbedOut.minute, subbedOut.extraMinute)}</span>
                                           </div>
                                         )}
 
@@ -1157,23 +1173,23 @@ export function MatchDetailModal({
                                         <div className="flex items-center gap-1 flex-wrap justify-center mt-0.5 max-w-[90px] sm:max-w-[130px]">
                                           {goalsCount > 0 && (
                                             <span className="text-[7px] sm:text-[8px] text-emerald-300 font-black bg-black/85 px-1 py-0.2 rounded shadow-xs">
-                                              ⚽ {pEvents.goals.map((g) => `${g.minute}'`).join(", ")}
+                                              ⚽ {pEvents.goals.map((g) => formatEventMinute(g.minute, g.extraMinute)).join(", ")}
                                             </span>
                                           )}
                                           {ownGoalsCount > 0 && (
                                             <span className="text-[7.5px] sm:text-[8.5px] text-rose-100 font-black bg-rose-950/90 border border-rose-500/70 px-1.5 py-0.5 rounded shadow-xs flex items-center gap-1">
                                               <OwnGoalIcon className="w-2.5 h-2.5" />
-                                              <span>(OG) {pEvents.ownGoals.map((o) => `${o.minute}'`).join(", ")}</span>
+                                              <span>(OG) {pEvents.ownGoals.map((o) => formatEventMinute(o.minute, o.extraMinute)).join(", ")}</span>
                                             </span>
                                           )}
                                           {assistsCount > 0 && (
                                             <span className="text-[7px] sm:text-[8px] text-cyan-300 font-black bg-black/85 px-1 py-0.2 rounded shadow-xs">
-                                              👟 {pEvents.assists.map((a) => `${a.minute}'`).join(", ")}
+                                              👟 {pEvents.assists.map((a) => formatEventMinute(a.minute, a.extraMinute)).join(", ")}
                                             </span>
                                           )}
                                           {subbedOut && (
                                             <span className="text-[7px] sm:text-[8px] text-rose-300 font-bold bg-black/85 px-1 py-0.2 rounded shadow-xs flex items-center gap-0.5">
-                                              🔄🔴 {subbedOut.minute}&apos;
+                                              🔄🔴 {formatEventMinute(subbedOut.minute, subbedOut.extraMinute)}
                                             </span>
                                           )}
                                         </div>
@@ -1292,7 +1308,7 @@ export function MatchDetailModal({
                                             className="flex items-center gap-2 p-2 rounded-xl bg-card/70 border border-border/70 text-xs shadow-xs"
                                           >
                                             <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/25 text-[11px] flex-shrink-0">
-                                              {sub.minute}&apos;
+                                              {formatEventMinute(sub.minute, sub.extraMinute)}
                                             </span>
                                             <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
                                               <span className="text-emerald-500 font-bold flex items-center gap-1">
@@ -1328,7 +1344,7 @@ export function MatchDetailModal({
                                             className="flex items-center gap-2 p-2 rounded-xl bg-card/70 border border-border/70 text-xs shadow-xs"
                                           >
                                             <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/25 text-[11px] flex-shrink-0">
-                                              {sub.minute}&apos;
+                                              {formatEventMinute(sub.minute, sub.extraMinute)}
                                             </span>
                                             <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
                                               <span className="text-emerald-500 font-bold flex items-center gap-1">

@@ -52,13 +52,21 @@ export async function getPlayerById(playerId: string): Promise<PlayerDetailData 
       take: 6,
     });
 
+    const EUROPEAN_CUP_CODES = ["CL", "EL", "ECL", "USC"];
+    const filteredStats = (player.stats || []).filter((s) => {
+      const code = s.league?.code?.toUpperCase() || "";
+      if (EUROPEAN_CUP_CODES.includes(code)) return true;
+      if (s.league?.type === "LEAGUE" || s.leagueId === player.team?.leagueId) return true;
+      return false;
+    });
+
     const recentMatches = recentMatchesRaw as unknown as MatchItem[];
 
     return {
       player: {
         ...player,
         team: player.team as unknown as Team & { league: League },
-        stats: player.stats as unknown as PlayerSeasonStatItem[],
+        stats: filteredStats as unknown as PlayerSeasonStatItem[],
       } as unknown as Player & { team: Team & { league: League }; stats?: PlayerSeasonStatItem[] },
       recentMatches,
     };

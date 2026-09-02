@@ -30,7 +30,7 @@ export async function getTeamById(teamId: string): Promise<TeamDetailData | null
 
     if (!team) return null;
 
-    // Lấy tất cả các trận đấu liên quan đến CLB này
+    // Lấy tất cả các trận đấu trong mùa giải liên quan đến CLB này
     const matchesRaw = await prisma.match.findMany({
       where: {
         OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
@@ -46,11 +46,40 @@ export async function getTeamById(teamId: string): Promise<TeamDetailData | null
           },
         },
       },
-      orderBy: { matchDate: "desc" },
-      take: 40,
+      orderBy: { matchDate: "asc" },
     });
 
-    const matches = matchesRaw as unknown as MatchItem[];
+    const rawMatchesList = matchesRaw as unknown as MatchItem[];
+
+    // Chuẩn hóa tên vòng đấu theo từng giải đấu cho CLB này:
+    // Với giải VĐQG: trận thứ k trong mùa của CLB luôn là "Vòng k"
+    // Với Cúp Châu Âu: trận thứ k là "Vòng bảng - Lượt k"
+    const matches = rawMatchesList.map((m) => {
+      if (m.league?.type === "LEAGUE" || m.leagueId === team.leagueId) {
+        const sameLeagueMatches = rawMatchesList
+          .filter((x) => x.leagueId === m.leagueId)
+          .sort((a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime());
+        const matchIndex = sameLeagueMatches.findIndex((x) => x.id === m.id);
+        if (matchIndex !== -1) {
+          return {
+            ...m,
+            round: `Vòng ${matchIndex + 1}`,
+          };
+        }
+      } else if (["CL", "EL", "ECL"].includes(m.league?.code?.toUpperCase() || "")) {
+        const sameLeagueMatches = rawMatchesList
+          .filter((x) => x.leagueId === m.leagueId)
+          .sort((a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime());
+        const matchIndex = sameLeagueMatches.findIndex((x) => x.id === m.id);
+        if (matchIndex !== -1) {
+          return {
+            ...m,
+            round: `Vòng bảng - Lượt ${matchIndex + 1}`,
+          };
+        }
+      }
+      return m;
+    });
 
     // 1. Nhóm các trận đấu theo từng giải đấu (Competition / League)
     const leagueMap = new Map<string, { league: any; matches: MatchItem[] }>();

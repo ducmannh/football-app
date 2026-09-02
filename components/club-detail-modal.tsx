@@ -14,6 +14,8 @@ import {
   Loader2,
   ExternalLink,
   ChevronRight,
+  ChevronDown,
+  Check,
   Shield,
 } from "lucide-react";
 
@@ -33,11 +35,15 @@ export function ClubDetailModal({
   const [data, setData] = useState<TeamDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"squad" | "matches" | "stats">("squad");
+  const [matchFilter, setMatchFilter] = useState<"all" | "finished" | "upcoming">("all");
+  const [matchLeagueFilter, setMatchLeagueFilter] = useState<string>("ALL");
+  const [isLeagueDropdownOpen, setIsLeagueDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (!teamId) return;
 
     let isMounted = true;
+    setLoading(true);
 
     async function loadTeam() {
       try {
@@ -61,12 +67,54 @@ export function ClubDetailModal({
     };
   }, [teamId]);
 
-  if (!teamId) return null;
-
   const team = data?.team;
   const stats = data?.stats;
   const matches = data?.matches || [];
   const players = team?.players || [];
+
+  const uniqueLeagues = React.useMemo(() => {
+    if (!matches || matches.length === 0) return [];
+    const map = new Map<string, { id: string; name: string; shortName: string; logo: string }>();
+    for (const m of matches) {
+      if (m.league && !map.has(m.league.id)) {
+        map.set(m.league.id, {
+          id: m.league.id,
+          name: m.league.name,
+          shortName: m.league.shortName || m.league.name,
+          logo: m.league.logo,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [matches]);
+
+  const displayMatches = React.useMemo(() => {
+    let list = [...matches];
+    if (matchLeagueFilter !== "ALL") {
+      list = list.filter((m) => m.leagueId === matchLeagueFilter);
+    }
+
+    if (matchFilter === "finished") {
+      return list
+        .filter((m) => m.status === "FINISHED")
+        .sort((a, b) => new Date(b.matchDate).getTime() - new Date(a.matchDate).getTime());
+    } else if (matchFilter === "upcoming") {
+      return list
+        .filter((m) => m.status !== "FINISHED")
+        .sort((a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime());
+    } else {
+      // "all": kết hợp đã đấu (mới nhất trước) và sắp tới (gần nhất trước)
+      const finished = list
+        .filter((m) => m.status === "FINISHED")
+        .sort((a, b) => new Date(b.matchDate).getTime() - new Date(a.matchDate).getTime());
+      const upcoming = list
+        .filter((m) => m.status !== "FINISHED")
+        .sort((a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime());
+      return [...finished, ...upcoming];
+    }
+  }, [matches, matchFilter, matchLeagueFilter]);
+
+  if (!teamId) return null;
 
   // Group players by position
   const goalkeepers = players.filter((p) => p.position === "GOALKEEPER");
@@ -254,111 +302,375 @@ export function ClubDetailModal({
 
               {/* TAB 2: MATCHES & FIXTURES */}
               {activeTab === "matches" && (
-                <div className="space-y-3">
-                  {matches.length > 0 ? (
-                    matches.map((m: MatchItem) => {
-                      const isHome = m.homeTeamId === team.id;
-                      const opponent = isHome ? m.awayTeam : m.homeTeam;
-                      const isFinished = m.status === "FINISHED";
-                      const isLive = m.status === "LIVE";
+                <div className="space-y-4">
+                  {/* Filter controls */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl bg-secondary/30 border border-border/60">
+                    {/* Status Segmented Buttons */}
+                    <div className="flex items-center gap-1.5 p-1 rounded-xl bg-background/80 border border-border/60 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => setMatchFilter("all")}
+                        className={cn(
+                          "flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                          matchFilter === "all"
+                            ? "bg-emerald-500 text-white shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        Tất cả ({matches.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMatchFilter("finished")}
+                        className={cn(
+                          "flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                          matchFilter === "finished"
+                            ? "bg-emerald-500 text-white shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        Kết quả ({matches.filter((m) => m.status === "FINISHED").length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMatchFilter("upcoming")}
+                        className={cn(
+                          "flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                          matchFilter === "upcoming"
+                            ? "bg-emerald-500 text-white shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        Lịch đấu ({matches.filter((m) => m.status !== "FINISHED").length})
+                      </button>
+                    </div>
 
-                      let matchOutcome = "text-muted-foreground";
-                      const hasPen = m.homePenaltyScore !== null && m.awayPenaltyScore !== null;
-                      const teamPen = isHome ? m.homePenaltyScore : m.awayPenaltyScore;
-                      const oppPen = isHome ? m.awayPenaltyScore : m.homePenaltyScore;
-
-                      if (isFinished) {
-                        const teamScore = isHome ? m.homeScore : m.awayScore;
-                        const oppScore = isHome ? m.awayScore : m.homeScore;
-                        if (hasPen && teamPen != null && oppPen != null) {
-                          if (teamPen > oppPen) matchOutcome = "text-emerald-500 font-black";
-                          else matchOutcome = "text-rose-500 font-black";
-                        } else {
-                          if (teamScore > oppScore) matchOutcome = "text-emerald-500 font-black";
-                          else if (teamScore < oppScore) matchOutcome = "text-rose-500 font-black";
-                          else matchOutcome = "text-amber-500 font-bold";
-                        }
-                      }
-
-                      return (
-                        <div
-                          key={m.id}
-                          onClick={() => onSelectMatch?.(m.id)}
-                          className="flex items-center justify-between p-3 sm:p-4 rounded-2xl border border-border/80 bg-secondary/30 hover:bg-secondary/60 transition-all cursor-pointer group"
+                    {/* Custom Luxury Competition Filter Dropdown */}
+                    {uniqueLeagues.length > 1 && (
+                      <div className="relative">
+                        {/* Dropdown Trigger Button */}
+                        <button
+                          type="button"
+                          onClick={() => setIsLeagueDropdownOpen(!isLeagueDropdownOpen)}
+                          className={cn(
+                            "w-full sm:w-auto flex items-center justify-between gap-2.5 px-3 py-1.5 rounded-xl bg-background/90 hover:bg-secondary/80 border text-xs font-bold transition-all shadow-2xs cursor-pointer select-none",
+                            isLeagueDropdownOpen
+                              ? "border-emerald-500 ring-2 ring-emerald-500/20 text-foreground"
+                              : matchLeagueFilter !== "ALL"
+                              ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
+                              : "border-border/80 text-foreground"
+                          )}
                         >
-                          {/* Match Date & League */}
-                          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                            <div className="w-8 h-8 rounded-xl bg-white p-1 flex items-center justify-center flex-shrink-0 shadow-2xs border border-black/10">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={m.league.logo}
-                                alt={m.league.name}
-                                className="w-full h-full object-contain"
-                              />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-foreground truncate">
-                                {m.round} • {m.league.shortName}
-                              </p>
-                              <p className="text-[10px] sm:text-[11px] text-muted-foreground">
-                                {new Date(m.matchDate).toLocaleDateString("vi-VN", {
-                                  weekday: "short",
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                })}
-                              </p>
-                            </div>
+                          <div className="flex items-center gap-2 truncate">
+                            {matchLeagueFilter === "ALL" ? (
+                              <>
+                                <span className="text-xs">🏆</span>
+                                <span className="truncate">Tất cả giải đấu ({uniqueLeagues.length})</span>
+                              </>
+                            ) : (
+                              (() => {
+                                const selected = uniqueLeagues.find((l) => l.id === matchLeagueFilter);
+                                return (
+                                  <>
+                                    {selected?.logo && (
+                                      <div className="w-4 h-4 rounded bg-white p-0.5 flex items-center justify-center flex-shrink-0 shadow-2xs border border-black/10">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={selected.logo}
+                                          alt=""
+                                          className="w-full h-full object-contain"
+                                        />
+                                      </div>
+                                    )}
+                                    <span className="truncate">{selected?.name || "Giải đấu"}</span>
+                                  </>
+                                );
+                              })()
+                            )}
                           </div>
+                          <ChevronDown
+                            className={cn(
+                              "w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 flex-shrink-0",
+                              isLeagueDropdownOpen && "rotate-180 text-emerald-500"
+                            )}
+                          />
+                        </button>
 
-                          {/* Opponent & Score */}
-                          <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-                            <div className="flex items-center gap-2 text-right">
-                              <span className="text-xs sm:text-sm font-extrabold text-foreground truncate max-w-[120px] sm:max-w-none">
-                                {isHome ? "vs" : "@"} {opponent.name}
-                              </span>
-                              <div className="w-6 h-6 rounded-lg bg-white p-0.5 flex items-center justify-center flex-shrink-0 shadow-2xs border border-black/10">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={opponent.logo}
-                                  alt={opponent.name}
-                                  className="w-full h-full object-contain"
-                                />
+                        {/* Dropdown Menu Popover */}
+                        {isLeagueDropdownOpen && (
+                          <>
+                            {/* Backdrop overlay */}
+                            <div
+                              className="fixed inset-0 z-40"
+                              onClick={() => setIsLeagueDropdownOpen(false)}
+                            />
+
+                            {/* Menu content */}
+                            <div className="absolute right-0 top-full mt-1.5 z-50 w-64 p-1.5 rounded-2xl bg-card/95 backdrop-blur-2xl border border-border shadow-2xl space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                              {/* Tất cả giải đấu option */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMatchLeagueFilter("ALL");
+                                  setIsLeagueDropdownOpen(false);
+                                }}
+                                className={cn(
+                                  "w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-left group",
+                                  matchLeagueFilter === "ALL"
+                                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-2xs"
+                                    : "hover:bg-secondary text-foreground"
+                                )}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-sm">🏆</span>
+                                  <span>Tất cả giải đấu</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 rounded-full bg-secondary text-[10px] text-muted-foreground font-extrabold">
+                                    {matches.length}
+                                  </span>
+                                  {matchLeagueFilter === "ALL" && (
+                                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                  )}
+                                </div>
+                              </button>
+
+                              {/* Unique Leagues list */}
+                              {uniqueLeagues.map((l) => {
+                                const count = matches.filter((m) => m.leagueId === l.id).length;
+                                const isSelected = matchLeagueFilter === l.id;
+
+                                return (
+                                  <button
+                                    key={l.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setMatchLeagueFilter(l.id);
+                                      setIsLeagueDropdownOpen(false);
+                                    }}
+                                    className={cn(
+                                      "w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-left group",
+                                      isSelected
+                                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-2xs"
+                                        : "hover:bg-secondary text-foreground"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <div className="w-5 h-5 rounded-md bg-white p-0.5 flex items-center justify-center flex-shrink-0 shadow-2xs border border-black/10">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={l.logo}
+                                          alt={l.name}
+                                          className="w-full h-full object-contain"
+                                        />
+                                      </div>
+                                      <span className="truncate">{l.name}</span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                      <span className="px-2 py-0.5 rounded-full bg-secondary text-[10px] text-muted-foreground font-extrabold">
+                                        {count}
+                                      </span>
+                                      {isSelected && (
+                                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Render Matches List */}
+                  {displayMatches.length > 0 ? (
+                    <div className="space-y-3">
+                      {displayMatches.map((m: MatchItem) => {
+                        const isHome = m.homeTeamId === team.id;
+                        const isFinished = m.status === "FINISHED";
+                        const isLive = m.status === "LIVE";
+
+                        let outcomeType: "win" | "draw" | "loss" | "none" = "none";
+                        const hasPen = m.homePenaltyScore !== null && m.awayPenaltyScore !== null;
+                        const teamPen = isHome ? m.homePenaltyScore : m.awayPenaltyScore;
+                        const oppPen = isHome ? m.awayPenaltyScore : m.homePenaltyScore;
+
+                        if (isFinished) {
+                          const teamScore = isHome ? m.homeScore : m.awayScore;
+                          const oppScore = isHome ? m.awayScore : m.homeScore;
+                          if (hasPen && teamPen != null && oppPen != null) {
+                            outcomeType = teamPen > oppPen ? "win" : "loss";
+                          } else {
+                            if (teamScore > oppScore) outcomeType = "win";
+                            else if (teamScore < oppScore) outcomeType = "loss";
+                            else outcomeType = "draw";
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={m.id}
+                            onClick={() => onSelectMatch?.(m.id)}
+                            className={cn(
+                              "flex flex-col p-3 sm:p-4 rounded-2xl border transition-all cursor-pointer group shadow-2xs hover:shadow-md",
+                              outcomeType === "win"
+                                ? "border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50 hover:bg-emerald-500/10"
+                                : outcomeType === "loss"
+                                ? "border-rose-500/30 bg-rose-500/5 hover:border-rose-500/50 hover:bg-rose-500/10"
+                                : outcomeType === "draw"
+                                ? "border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50 hover:bg-amber-500/10"
+                                : "border-border/80 bg-secondary/30 hover:border-emerald-500/40 hover:bg-secondary/60"
+                            )}
+                          >
+                            {/* Top info row: League, Round, Date/Time */}
+                            <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-border/40 text-[11px] text-muted-foreground">
+                              <div className="flex items-center gap-2">
+                                <div className="w-5 h-5 rounded-md bg-white p-0.5 flex items-center justify-center flex-shrink-0 shadow-2xs border border-black/10">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={m.league.logo}
+                                    alt={m.league.name}
+                                    className="w-full h-full object-contain"
+                                  />
+                                </div>
+                                <span className="font-bold text-foreground">
+                                  {m.league.name || m.league.shortName}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-md bg-secondary text-[10px] font-extrabold text-foreground border border-border/60">
+                                  {m.round}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 font-medium">
+                                <span>
+                                  {new Date(m.matchDate).toLocaleDateString("vi-VN", {
+                                    weekday: "short",
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                  })}
+                                </span>
                               </div>
                             </div>
 
-                            {/* Score badge */}
-                            <div className="w-18 sm:w-28 text-center">
-                              {isFinished ? (
-                                <span className={cn("px-2.5 py-1 rounded-xl bg-card border border-border font-mono text-xs sm:text-sm flex flex-col items-center", matchOutcome)}>
-                                  <span>{m.homeScore} : {m.awayScore}</span>
-                                  {hasPen && teamPen != null && oppPen != null && (
-                                    <span className={cn("text-[9px] font-black -mt-0.5 tracking-tight whitespace-nowrap", teamPen > oppPen ? "text-emerald-500" : "text-rose-500")}>
-                                      {teamPen > oppPen ? "Thắng" : "Thua"} Pen ({m.homePenaltyScore}-{m.awayPenaltyScore})
-                                    </span>
+                            {/* Main match row: Home vs Away */}
+                            <div className="flex items-center justify-between gap-2 sm:gap-4">
+                              {/* Home Team */}
+                              <div className="flex-1 flex items-center gap-2.5 min-w-0">
+                                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white p-1 flex items-center justify-center flex-shrink-0 shadow-2xs border border-black/10">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={m.homeTeam.logo}
+                                    alt={m.homeTeam.name}
+                                    className="w-full h-full object-contain"
+                                  />
+                                </div>
+                                <span
+                                  className={cn(
+                                    "text-xs sm:text-sm truncate",
+                                    m.homeTeamId === team.id
+                                      ? "font-black text-emerald-500 dark:text-emerald-400"
+                                      : "font-semibold text-foreground"
                                   )}
+                                >
+                                  {m.homeTeam.name}
                                 </span>
-                              ) : isLive ? (
-                                <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white font-black text-[10px] animate-pulse">
-                                  {m.homeScore} : {m.awayScore} ({m.minute || "LIVE"})
-                                </span>
-                              ) : (
-                                <span className="px-2.5 py-1 rounded-xl bg-secondary font-mono text-xs text-muted-foreground font-bold">
-                                  {new Date(m.matchDate).toLocaleTimeString("vi-VN", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </span>
-                              )}
-                            </div>
+                              </div>
 
-                            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-transform group-hover:translate-x-0.5" />
+                              {/* Center: Score / Outcome / Time */}
+                              <div className="flex flex-col items-center justify-center flex-shrink-0 px-2 min-w-[90px] sm:min-w-[120px]">
+                                {isFinished ? (
+                                  <div className="flex flex-col items-center">
+                                    <div className="flex items-center gap-1.5">
+                                      <span
+                                        className={cn(
+                                          "px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider",
+                                          outcomeType === "win"
+                                            ? "bg-emerald-500 text-white"
+                                            : outcomeType === "loss"
+                                            ? "bg-rose-500 text-white"
+                                            : "bg-amber-500 text-white"
+                                        )}
+                                      >
+                                        {outcomeType === "win"
+                                          ? "THẮNG"
+                                          : outcomeType === "loss"
+                                          ? "THUA"
+                                          : "HÒA"}
+                                      </span>
+                                      <span className="font-mono font-black text-sm sm:text-base text-foreground tracking-tight">
+                                        {m.homeScore} - {m.awayScore}
+                                      </span>
+                                    </div>
+                                    {hasPen && teamPen != null && oppPen != null && (
+                                      <span
+                                        className={cn(
+                                          "text-[10px] font-bold mt-0.5",
+                                          teamPen > oppPen
+                                            ? "text-emerald-500"
+                                            : "text-rose-500"
+                                        )}
+                                      >
+                                        Pen ({m.homePenaltyScore}-{m.awayPenaltyScore})
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : isLive ? (
+                                  <div className="flex flex-col items-center">
+                                    <span className="px-2.5 py-0.5 rounded-full bg-rose-500 text-white font-black text-[10px] animate-pulse">
+                                      LIVE {m.minute || ""}
+                                    </span>
+                                    <span className="font-mono font-black text-sm sm:text-base text-foreground mt-0.5">
+                                      {m.homeScore} - {m.awayScore}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center">
+                                    <span className="px-3 py-1 rounded-xl bg-secondary font-mono text-xs font-extrabold text-foreground border border-border/80 shadow-2xs">
+                                      {new Date(m.matchDate).toLocaleTimeString("vi-VN", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground font-semibold mt-0.5">
+                                      {isHome ? "Sân nhà" : "Sân khách"}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Away Team */}
+                              <div className="flex-1 flex items-center justify-end gap-2.5 min-w-0 text-right">
+                                <span
+                                  className={cn(
+                                    "text-xs sm:text-sm truncate",
+                                    m.awayTeamId === team.id
+                                      ? "font-black text-emerald-500 dark:text-emerald-400"
+                                      : "font-semibold text-foreground"
+                                  )}
+                                >
+                                  {m.awayTeam.name}
+                                </span>
+                                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white p-1 flex items-center justify-center flex-shrink-0 shadow-2xs border border-black/10">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={m.awayTeam.logo}
+                                    alt={m.awayTeam.name}
+                                    className="w-full h-full object-contain"
+                                  />
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })
+                        );
+                      })}
+                    </div>
                   ) : (
                     <div className="text-center py-12 text-muted-foreground text-sm font-medium">
-                      Chưa có dữ liệu trận đấu cho câu lạc bộ này.
+                      Chưa có dữ liệu trận đấu phù hợp với bộ lọc.
                     </div>
                   )}
                 </div>

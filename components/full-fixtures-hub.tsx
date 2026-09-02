@@ -17,7 +17,7 @@ import {
 import { League, MatchItem, Team } from "@/types/football";
 import { getFullLeagueFixtures, getLeagues } from "@/lib/actions/match";
 import { LeagueBar } from "@/components/league-bar";
-import { cn } from "@/lib/utils";
+import { cn, getCountryFlagUrl } from "@/lib/utils";
 
 interface FullFixturesHubProps {
   leagues?: League[];
@@ -186,16 +186,23 @@ export function FullFixturesHub({
     ? Math.round((leagueData.finishedCount / leagueData.totalMatches) * 100)
     : 0;
 
-  // Format date helper in VN Time
-  const formatMatchTime = (dateInput: string | Date) => {
+  // Format date helper in VN Time with Thứ, Ngày/Tháng, Giờ:Phút
+  const formatMatchDateTime = (dateInput: string | Date) => {
     const d = new Date(dateInput);
-    return new Intl.DateTimeFormat("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      day: "2-digit",
-      month: "2-digit",
-      timeZone: "Asia/Ho_Chi_Minh",
-    }).format(d);
+    const vnTime = new Date(d.toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }));
+    const dayOfWeekMap = ["Chủ Nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
+    const dayOfWeek = dayOfWeekMap[vnTime.getDay()];
+    const day = String(vnTime.getDate()).padStart(2, "0");
+    const month = String(vnTime.getMonth() + 1).padStart(2, "0");
+    const hours = String(vnTime.getHours()).padStart(2, "0");
+    const minutes = String(vnTime.getMinutes()).padStart(2, "0");
+
+    return {
+      dayOfWeek,
+      date: `${day}/${month}`,
+      time: `${hours}:${minutes}`,
+      full: `${dayOfWeek}, ${day}/${month} • ${hours}:${minutes}`,
+    };
   };
 
   const formatRoundDateRange = (matchesInRound: MatchItem[]) => {
@@ -247,16 +254,27 @@ export function FullFixturesHub({
             </div>
 
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <span className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
                   {currentLeagueObj.name}
                 </span>
-                <span className="text-lg">{currentLeagueObj.flag}</span>
+                {/* Flag Image instead of raw emoji */}
+                <div className="w-5 h-3.5 rounded-xs overflow-hidden shadow-xs border border-white/20 flex-shrink-0 flex items-center justify-center bg-muted">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={getCountryFlagUrl(currentLeagueObj.country || currentLeagueObj.code)}
+                    alt={currentLeagueObj.country || currentLeagueObj.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = "none";
+                    }}
+                  />
+                </div>
               </div>
               <p className="text-xs sm:text-sm font-semibold text-muted-foreground flex items-center gap-2">
                 <span>Mùa giải {leagueData.seasonName}</span>
                 <span>•</span>
-                <span className="text-emerald-500 font-bold">
+                <span className="text-emerald-400 font-bold">
                   {currentLeagueObj.type === "CUP" ? "Giải Đấu Cúp" : "Giải Vô Địch Quốc Gia"}
                 </span>
               </p>
@@ -265,30 +283,54 @@ export function FullFixturesHub({
 
           {/* Season Stats Badge Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full md:w-auto">
-            <div className="bg-secondary/60 border border-border/80 rounded-2xl p-2.5 text-center">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase">Tổng số trận</p>
-              <p className="text-base sm:text-lg font-black text-foreground font-mono">
+            {/* 1. Tổng số trận */}
+            <div className="flex flex-col justify-between items-center bg-gradient-to-br from-blue-500/15 via-blue-500/5 to-transparent border border-blue-500/30 rounded-2xl p-3 text-center shadow-xs min-h-[84px] sm:min-h-[88px]">
+              <div className="min-h-[28px] flex items-center justify-center gap-1.5 w-full">
+                <span className="text-[11px] flex-shrink-0">🏆</span>
+                <p className="text-[10px] font-black text-blue-400 dark:text-blue-300 uppercase tracking-wider leading-tight">
+                  Tổng số trận
+                </p>
+              </div>
+              <p className="text-lg sm:text-xl font-black text-blue-400 dark:text-blue-300 font-mono mt-1">
                 {leagueData.totalMatches}
               </p>
             </div>
 
-            <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-2.5 text-center">
-              <p className="text-[10px] font-bold text-emerald-500 uppercase">Đã thi đấu</p>
-              <p className="text-base sm:text-lg font-black text-emerald-500 font-mono">
+            {/* 2. Đã thi đấu */}
+            <div className="flex flex-col justify-between items-center bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent border border-emerald-500/35 rounded-2xl p-3 text-center shadow-xs min-h-[84px] sm:min-h-[88px]">
+              <div className="min-h-[28px] flex items-center justify-center gap-1.5 w-full">
+                <span className="text-[11px] flex-shrink-0">✅</span>
+                <p className="text-[10px] font-black text-emerald-400 dark:text-emerald-300 uppercase tracking-wider leading-tight">
+                  Đã thi đấu
+                </p>
+              </div>
+              <p className="text-lg sm:text-xl font-black text-emerald-400 dark:text-emerald-300 font-mono mt-1">
                 {leagueData.finishedCount}
               </p>
             </div>
 
-            <div className="bg-secondary/60 border border-border/80 rounded-2xl p-2.5 text-center">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase">Sắp diễn ra</p>
-              <p className="text-base sm:text-lg font-black text-foreground font-mono">
+            {/* 3. Sắp diễn ra */}
+            <div className="flex flex-col justify-between items-center bg-gradient-to-br from-purple-500/15 via-purple-500/5 to-transparent border border-purple-500/30 rounded-2xl p-3 text-center shadow-xs min-h-[84px] sm:min-h-[88px]">
+              <div className="min-h-[28px] flex items-center justify-center gap-1.5 w-full">
+                <span className="text-[11px] flex-shrink-0">⏳</span>
+                <p className="text-[10px] font-black text-purple-400 dark:text-purple-300 uppercase tracking-wider leading-tight">
+                  Sắp diễn ra
+                </p>
+              </div>
+              <p className="text-lg sm:text-xl font-black text-purple-400 dark:text-purple-300 font-mono mt-1">
                 {leagueData.scheduledCount}
               </p>
             </div>
 
-            <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-2.5 text-center">
-              <p className="text-[10px] font-bold text-amber-500 uppercase">Tổng bàn thắng</p>
-              <p className="text-base sm:text-lg font-black text-amber-500 font-mono">
+            {/* 4. Tổng bàn thắng */}
+            <div className="flex flex-col justify-between items-center bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-transparent border border-amber-500/35 rounded-2xl p-3 text-center shadow-xs min-h-[84px] sm:min-h-[88px]">
+              <div className="min-h-[28px] flex items-center justify-center gap-1.5 w-full">
+                <span className="text-[11px] flex-shrink-0">⚽</span>
+                <p className="text-[10px] font-black text-amber-400 dark:text-amber-300 uppercase tracking-wider leading-tight">
+                  Tổng bàn thắng
+                </p>
+              </div>
+              <p className="text-lg sm:text-xl font-black text-amber-400 dark:text-amber-300 font-mono mt-1">
                 {leagueData.totalGoals}
               </p>
             </div>
@@ -298,12 +340,15 @@ export function FullFixturesHub({
         {/* Progress Bar */}
         <div className="mt-5 pt-4 border-t border-border/60">
           <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-            <span className="text-muted-foreground">Tiến độ mùa giải</span>
-            <span className="text-emerald-500 font-mono font-black">{progressPercent}% Hoàn thành</span>
+            <span className="text-muted-foreground flex items-center gap-1.5 font-semibold">
+              <span>📊</span>
+              <span>Tiến độ mùa giải</span>
+            </span>
+            <span className="text-emerald-400 font-mono font-black">{progressPercent}% Hoàn thành</span>
           </div>
-          <div className="w-full h-2.5 rounded-full bg-secondary/80 overflow-hidden border border-border/60">
+          <div className="w-full h-2.5 rounded-full bg-secondary/80 overflow-hidden border border-border/60 p-0.5">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500"
+              className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-300 transition-all duration-700 shadow-xs"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -578,6 +623,8 @@ export function FullFixturesHub({
                     const hasPen = m.homePenaltyScore !== null && m.awayPenaltyScore !== null;
                     const goalsInMatch = (m.events || []).filter((e) => e.type === "GOAL" || e.type === "PENALTY_SCORED");
 
+                    const dt = formatMatchDateTime(m.matchDate);
+
                     return (
                       <div
                         key={m.id}
@@ -590,11 +637,18 @@ export function FullFixturesHub({
                         )}
                       >
                         {/* Top Match Info Row */}
-                        <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground mb-3">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-3 h-3 text-emerald-500" />
-                            <span className="font-mono text-foreground font-semibold">
-                              {formatMatchTime(m.matchDate)}
+                        <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground mb-3 gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Clock className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                            <span className="px-1.5 py-0.5 rounded-md bg-secondary text-foreground font-black text-[10px] tracking-tight border border-border/60">
+                              {dt.dayOfWeek}
+                            </span>
+                            <span className="font-mono text-muted-foreground text-[11px]">
+                              {dt.date}
+                            </span>
+                            <span className="text-muted-foreground/50">•</span>
+                            <span className="font-mono text-foreground font-extrabold text-xs">
+                              {dt.time}
                             </span>
                           </div>
 

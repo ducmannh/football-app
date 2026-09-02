@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { getLeagues, getMatches, getLiveMatchesCount } from "@/lib/actions/match";
 import { Navbar, NavTab } from "@/components/navbar";
 import { LeagueBar } from "@/components/league-bar";
@@ -47,54 +47,57 @@ export default function HomePage() {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadData() {
+  // Main data fetcher
+  const loadData = useCallback(async (isBackground = false) => {
+    if (!isBackground) {
       setLoading(true);
-      try {
-        const [fetchedLeagues, fetchedMatches, fetchedLiveCount] = await Promise.all([
-          getLeagues(),
-          getMatches({
-            date: selectedDate,
-            leagueCode: selectedLeague,
-            status: selectedStatus,
-          }),
-          getLiveMatchesCount(selectedDate),
-        ]);
-
-        if (isMounted) {
-          setLeagues(fetchedLeagues as League[]);
-          setMatches(fetchedMatches as unknown as MatchItem[]);
-          setLiveCount(fetchedLiveCount);
-        }
-      } catch (error) {
-        console.error("Failed to load football data:", error);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
+    } else {
+      setIsRefreshing(true);
     }
 
-    loadData();
+    try {
+      const [fetchedLeagues, fetchedMatches, fetchedLiveCount] = await Promise.all([
+        getLeagues(),
+        getMatches({
+          date: selectedDate,
+          leagueCode: selectedLeague,
+          status: selectedStatus,
+        }),
+        getLiveMatchesCount(selectedDate),
+      ]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedDate, selectedLeague, selectedStatus, refreshKey]);
+      setLeagues(fetchedLeagues as League[]);
+      setMatches(fetchedMatches as unknown as MatchItem[]);
+      setLiveCount(fetchedLiveCount);
+    } catch (error) {
+      console.error("Failed to load football data:", error);
+    } finally {
+      if (!isBackground) setLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [selectedDate, selectedLeague, selectedStatus]);
 
-  // Smart Live Polling (Tự động cập nhật 25s khi có trận Live, 90s khi không có)
+  // Load when filters change
   useEffect(() => {
-    const pollInterval = liveCount > 0 ? 25000 : 90000;
+    loadData(false);
+  }, [loadData]);
+
+  // Smart Silent Live Polling (Cập nhật 30s ngầm khi có trận Live, không reload hay giật màn hình)
+  useEffect(() => {
+    // Chỉ tự động cập nhật khi có trận LIVE đang diễn ra
+    if (liveCount === 0) return;
+
     const interval = setInterval(() => {
-      setRefreshKey((k) => k + 1);
-    }, pollInterval);
+      // Chỉ fetch ngầm khi người dùng đang mở tab trang web
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        loadData(true);
+      }
+    }, 30000);
 
     return () => clearInterval(interval);
-  }, [liveCount]);
+  }, [liveCount, loadData]);
 
   // Live Matches list for top ticker
   const liveCountInView = selectedStatus === "ALL"
@@ -266,14 +269,14 @@ export default function HomePage() {
 
                 <button
                   type="button"
-                  onClick={() => setRefreshKey((k) => k + 1)}
-                  disabled={loading}
+                  onClick={() => loadData(true)}
+                  disabled={loading || isRefreshing}
                   aria-label="Làm mới dữ liệu"
                   className="p-2.5 rounded-xl border border-border/80 bg-background/80 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer flex-shrink-0 shadow-2xs active:scale-95"
                   title="Làm mới dữ liệu"
                 >
                   <RefreshCw
-                    className={cn("w-4 h-4 text-emerald-500", loading && "animate-spin")}
+                    className={cn("w-4 h-4 text-emerald-500", (loading || isRefreshing) && "animate-spin")}
                   />
                 </button>
               </div>

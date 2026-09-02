@@ -901,21 +901,20 @@ function SquadSection({
             className="flex items-center gap-3 p-2.5 sm:p-3 rounded-2xl border border-border/70 bg-secondary/30 hover:bg-secondary/70 hover:border-emerald-500/40 transition-all cursor-pointer group shadow-2xs"
           >
             {/* Player Avatar */}
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-card p-0.5 border border-border/80 flex items-center justify-center flex-shrink-0 overflow-hidden group-hover:scale-105 transition-transform shadow-2xs">
-              {p.avatar ? (
+            <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-emerald-950 to-secondary p-0.5 border border-border/80 flex items-center justify-center flex-shrink-0 overflow-hidden group-hover:scale-105 transition-transform shadow-2xs">
+              <span className="font-mono font-black text-xs text-emerald-400 select-none pointer-events-none">
+                #{p.number || p.name.slice(0, 2).toUpperCase()}
+              </span>
+              {p.avatar && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={p.avatar}
                   alt={p.name}
-                  className="w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-cover"
                   onError={(e) => {
                     (e.target as HTMLElement).style.display = "none";
                   }}
                 />
-              ) : (
-                <span className="font-bold text-xs text-muted-foreground">
-                  #{p.number || "•"}
-                </span>
               )}
             </div>
 

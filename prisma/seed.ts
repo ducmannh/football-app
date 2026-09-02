@@ -246,8 +246,57 @@ export function computePlayerBio(
     baseVal = 55;
   }
   const marketValue = `€${Math.min(180, Math.max(10, baseVal + (playerName.charCodeAt(0) % 30)))}M`;
-
   return { height, weight, preferredFoot, marketValue };
+}
+
+const STAR_GKS = [
+  "david raya", "alisson", "ederson", "thibaut courtois", "jan oblak",
+  "mike maignan", "manuel neuer", "gregor kobel", "yann sommer", "gianluigi donnarumma",
+  "marc-andré ter stegen", "wojciech szczesny", "emiliano martínez", "nick pope",
+  "guglielmo vicario", "jordan pickford", "robert sánchez", "bart verbruggen",
+  "bernd leno", "alphonse areola", "josé sá", "lukas hradecky", "alex meret",
+  "michele di gregorio", "unai simón", "álex remiro", "joan garcía", "péter gulácsi",
+  "kevin trapp", "lucas chevalier", "brice samba", "matvei safonov", "kamil grabara",
+  "jack butland", "caoimhín kelleher", "james trafford", "antonio sivera", "álvaro valles",
+  "sergio herrera", "devis vásquez", "christos mandas", "josep martínez"
+];
+
+async function getMainGoalkeeper(teamId: string) {
+  const gks = await prisma.player.findMany({
+    where: { teamId, position: "GOALKEEPER" },
+  });
+  if (gks.length === 0) {
+    return await prisma.player.findFirst({ where: { teamId } });
+  }
+
+  for (const star of STAR_GKS) {
+    const found = gks.find((g) => g.name.toLowerCase().includes(star));
+    if (found) return found;
+  }
+
+  const num1 = gks.find((g) => g.number === 1);
+  if (num1) return num1;
+
+  const sortedByNum = gks
+    .filter((g) => g.number && g.number > 0)
+    .sort((a, b) => (a.number || 99) - (b.number || 99));
+  if (sortedByNum.length > 0) return sortedByNum[0];
+
+  return gks[0];
+}
+
+export function translateCupRoundSlug(slug?: string, defaultRound = "Vòng 1"): string {
+  if (!slug) return defaultRound;
+  const s = slug.toLowerCase();
+  if (s.includes("preliminary") || s.includes("so-loai")) return "Vòng sơ loại";
+  if (s.includes("first-round") || s.includes("round-1") || s.includes("1st-round")) return "Vòng 1";
+  if (s.includes("second-round") || s.includes("round-2") || s.includes("2nd-round")) return "Vòng 2";
+  if (s.includes("third-round") || s.includes("round-3") || s.includes("3rd-round")) return "Vòng 3";
+  if (s.includes("fourth-round") || s.includes("round-4") || s.includes("4th-round") || s.includes("round-of-16") || s.includes("round_of_16")) return "Vòng 1/8";
+  if (s.includes("quarter")) return "Tứ kết";
+  if (s.includes("semi")) return "Bán kết";
+  if (s.includes("final")) return "Chung kết";
+  return defaultRound;
 }
 
 async function main() {
@@ -575,13 +624,18 @@ async function main() {
         const awayPenaltyScore = hasShootout ? Number(awayComp.shootoutScore) : null;
         const extraTimeStatus = (hasShootout || isPenDesc) ? "PEN" : null;
 
+        let initialRound = "Vòng 1";
+        if (l.type === "CUP") {
+          initialRound = translateCupRoundSlug(ev.season?.slug, "Vòng 1");
+        }
+
         const createdMatch = await prisma.match.create({
           data: {
             leagueId: leagueMap[l.code].id,
             seasonId: season26.id,
             homeTeamId,
             awayTeamId,
-            round: "Vòng đấu",
+            round: initialRound,
             matchDate,
             status,
             minute,
@@ -794,7 +848,7 @@ async function main() {
     });
 
     if (["CL", "EL", "ECL"].includes(l.code)) {
-      // Chỉ 3 Cúp Châu Âu mới dùng format "Vòng bảng - Lượt X"
+      // 3 Cúp Châu Âu dùng format "Vòng bảng - Lượt X"
       for (let i = 0; i < matches.length; i++) {
         const matchday = Math.floor(i / (l.matchesPerRound || 18)) + 1;
         await prisma.match.update({
@@ -802,8 +856,8 @@ async function main() {
           data: { round: `Vòng bảng - Lượt ${matchday}` },
         });
       }
-    } else {
-      // Tất cả giải VĐQG và Cúp Quốc gia (Coppa Italia, FA Cup, v.v.) dùng "Vòng 1", "Vòng 2", "Vòng 3"...
+    } else if (l.type === "LEAGUE") {
+      // Các giải VĐQG dùng "Vòng 1", "Vòng 2", "Vòng 3"...
       for (let i = 0; i < matches.length; i++) {
         const roundNum = Math.floor(i / (l.matchesPerRound || 10)) + 1;
         await prisma.match.update({
@@ -812,6 +866,7 @@ async function main() {
         });
       }
     }
+    // Đối với Cúp Quốc Gia (Carabao Cup, Coppa Italia, DFB Pokal, FA Cup...): Giữ nguyên vòng đấu chính xác từ ESPN (Vòng sơ loại, Vòng 1, Vòng 2, Vòng 3...)!
   }
 
   // 9. Tính toán Thống kê Cầu thủ (Vua phá lưới, Vua kiến tạo, Găng tay vàng, Kỷ luật)
@@ -898,19 +953,22 @@ async function main() {
 
     // Clean sheets (Găng tay vàng)
     const cleanSheetCountsByTeam: Record<string, number> = {};
+    const appCountsByTeam: Record<string, number> = {};
     const finishedMatches = matches.filter((m) => m.status === "FINISHED");
     for (const m of finishedMatches) {
+      appCountsByTeam[m.homeTeamId] = (appCountsByTeam[m.homeTeamId] || 0) + 1;
+      appCountsByTeam[m.awayTeamId] = (appCountsByTeam[m.awayTeamId] || 0) + 1;
+
       if (m.awayScore === 0) cleanSheetCountsByTeam[m.homeTeamId] = (cleanSheetCountsByTeam[m.homeTeamId] || 0) + 1;
       if (m.homeScore === 0) cleanSheetCountsByTeam[m.awayTeamId] = (cleanSheetCountsByTeam[m.awayTeamId] || 0) + 1;
     }
 
     for (const [teamId, csCount] of Object.entries(cleanSheetCountsByTeam)) {
-      const gk = await prisma.player.findFirst({
-        where: { teamId, position: "GOALKEEPER" },
-      }) || await prisma.player.findFirst({ where: { teamId } });
+      const gk = await getMainGoalkeeper(teamId);
 
       if (gk) {
-        const estimatedSaves = csCount * 4 + 2;
+        const teamApps = appCountsByTeam[teamId] || csCount;
+        const estimatedSaves = csCount * 4 + (teamApps - csCount) * 3 + 2;
         await prisma.playerSeasonStat.upsert({
           where: {
             playerId_leagueId_seasonId: {
@@ -922,6 +980,8 @@ async function main() {
           update: {
             cleanSheets: csCount,
             saves: estimatedSaves,
+            appearances: teamApps,
+            minutesPlayed: teamApps * 90,
           },
           create: {
             playerId: gk.id,
@@ -929,8 +989,8 @@ async function main() {
             seasonId: season26.id,
             cleanSheets: csCount,
             saves: estimatedSaves,
-            appearances: csCount,
-            minutesPlayed: csCount * 90,
+            appearances: teamApps,
+            minutesPlayed: teamApps * 90,
           },
         });
       }
@@ -960,29 +1020,111 @@ async function main() {
     }
   }
 
-  // 11. Đảm bảo 100% cầu thủ có đầy đủ thông tin thể chất & avatar
-  console.log("\n🖼️ 11. Chuẩn hóa & Nạp đầy đủ thông tin thể chất & avatar cho toàn bộ cầu thủ...");
+  // 11. Đảm bảo 100% cầu thủ có đầy đủ thông tin thể chất & avatar từ ESPN
+  console.log("\n🖼️ 11. Chuẩn hóa & Nạp đầy đủ thông tin thể chất & avatar từ ESPN cho toàn bộ cầu thủ...");
   const allPlayersInDb = await prisma.player.findMany({
     include: { team: true },
   });
 
   for (const p of allPlayersInDb) {
     const bio = computePlayerBio(p.name, p.position, null, null, p.team?.name);
-    const needAvatar = !p.avatar && p.espnId;
-    const needBio = !p.height || !p.weight || !p.preferredFoot || !p.marketValue;
+    const espnAvatar = p.espnId ? `https://a.espncdn.com/i/headshots/soccer/players/full/${p.espnId}.png` : null;
 
-    if (needAvatar || needBio) {
-      await prisma.player.update({
-        where: { id: p.id },
-        data: {
-          ...(needAvatar ? { avatar: `https://a.espncdn.com/i/headshots/soccer/players/full/${p.espnId}.png` } : {}),
-          ...(!p.height ? { height: bio.height } : {}),
-          ...(!p.weight ? { weight: bio.weight } : {}),
-          ...(!p.preferredFoot ? { preferredFoot: bio.preferredFoot } : {}),
-          ...(!p.marketValue ? { marketValue: bio.marketValue } : {}),
-        },
-      });
+    await prisma.player.update({
+      where: { id: p.id },
+      data: {
+        avatar: p.avatar && p.avatar.includes("espn") ? p.avatar : espnAvatar,
+        ...(!p.height ? { height: bio.height } : {}),
+        ...(!p.weight ? { weight: bio.weight } : {}),
+        ...(!p.preferredFoot ? { preferredFoot: bio.preferredFoot } : {}),
+        ...(!p.marketValue ? { marketValue: bio.marketValue } : {}),
+      },
+    });
+  }
+
+  // 12. Chuẩn hóa & Lưu Bảng Xếp Hạng Sân Nhà, Sân Khách & Phong độ (Home / Away / Form)
+  console.log("\n🏟️ 12. Tính toán & Lưu Bảng Xếp Hạng Sân Nhà & Sân Khách...");
+  const allStandings = await prisma.standing.findMany({
+    include: { league: true, team: true },
+  });
+
+  for (const s of allStandings) {
+    const homeMatches = await prisma.match.findMany({
+      where: { leagueId: s.leagueId, seasonId: s.seasonId, homeTeamId: s.teamId, status: "FINISHED" },
+      orderBy: { matchDate: "asc" },
+    });
+    const awayMatches = await prisma.match.findMany({
+      where: { leagueId: s.leagueId, seasonId: s.seasonId, awayTeamId: s.teamId, status: "FINISHED" },
+      orderBy: { matchDate: "asc" },
+    });
+
+    let homePlayed = homeMatches.length;
+    let homeWon = homeMatches.filter((m) => m.homeScore > m.awayScore).length;
+    let homeDraw = homeMatches.filter((m) => m.homeScore === m.awayScore).length;
+    let homeLost = homeMatches.filter((m) => m.homeScore < m.awayScore).length;
+    let homeGoalsFor = homeMatches.reduce((acc, m) => acc + m.homeScore, 0);
+    let homeGoalsAgainst = homeMatches.reduce((acc, m) => acc + m.awayScore, 0);
+    let homePoints = homeWon * 3 + homeDraw;
+
+    let awayPlayed = awayMatches.length;
+    let awayWon = awayMatches.filter((m) => m.awayScore > m.homeScore).length;
+    let awayDraw = awayMatches.filter((m) => m.awayScore === m.homeScore).length;
+    let awayLost = awayMatches.filter((m) => m.awayScore < m.homeScore).length;
+    let awayGoalsFor = awayMatches.reduce((acc, m) => acc + m.awayScore, 0);
+    let awayGoalsAgainst = awayMatches.reduce((acc, m) => acc + m.homeScore, 0);
+    let awayPoints = awayWon * 3 + awayDraw;
+
+    if (homePlayed === 0 && awayPlayed === 0 && s.played > 0) {
+      homePlayed = Math.ceil(s.played / 2);
+      homeWon = Math.ceil(s.won / 2);
+      homeDraw = Math.ceil(s.draw / 2);
+      homeLost = Math.ceil(s.lost / 2);
+      homeGoalsFor = Math.ceil(s.goalsFor / 2);
+      homeGoalsAgainst = Math.ceil(s.goalsAgainst / 2);
+      homePoints = homeWon * 3 + homeDraw;
+
+      awayPlayed = s.played - homePlayed;
+      awayWon = s.won - homeWon;
+      awayDraw = s.draw - homeDraw;
+      awayLost = s.lost - homeLost;
+      awayGoalsFor = s.goalsFor - homeGoalsFor;
+      awayGoalsAgainst = s.goalsAgainst - homeGoalsAgainst;
+      awayPoints = awayWon * 3 + awayDraw;
     }
+
+    const allTeamMatches = [...homeMatches, ...awayMatches].sort(
+      (a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime()
+    );
+    const form = allTeamMatches
+      .slice(-5)
+      .map((m) => {
+        const isHome = m.homeTeamId === s.teamId;
+        const myScore = isHome ? m.homeScore : m.awayScore;
+        const oppScore = isHome ? m.awayScore : m.homeScore;
+        return myScore > oppScore ? "W" : myScore < oppScore ? "L" : "D";
+      })
+      .join("");
+
+    await prisma.standing.update({
+      where: { id: s.id },
+      data: {
+        homePlayed,
+        homeWon,
+        homeDraw,
+        homeLost,
+        homeGoalsFor,
+        homeGoalsAgainst,
+        homePoints,
+        awayPlayed,
+        awayWon,
+        awayDraw,
+        awayLost,
+        awayGoalsFor,
+        awayGoalsAgainst,
+        awayPoints,
+        ...(form ? { form } : {}),
+      },
+    });
   }
 
   const finalTeams = await prisma.team.count();

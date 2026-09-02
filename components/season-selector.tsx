@@ -45,21 +45,34 @@ export function SeasonSelector({
   }, []);
 
   const defaultSeasons: Season[] = seasons.length > 0
-    ? seasons.filter((s) => s.name === "2026/2027" || s.name === "2025/2026")
+    ? seasons.filter((s) => s.name === "2026/2027")
     : [
         { id: "s2026", name: "2026/2027", isCurrent: true, startDate: "", endDate: "" },
-        { id: "s2025", name: "2025/2026", isCurrent: false, startDate: "", endDate: "" },
       ];
 
   const getSeasonLabel = (name: string, isCurrent: boolean) => {
     if (name === "2026/2027" || isCurrent) return "Mùa 2026/2027 (Hiện tại)";
-    if (name === "2025/2026") return "Mùa 2025/2026 (Năm ngoái)";
     return `Mùa ${name}`;
   };
 
   const getSeasonShortLabel = (name: string) => {
     return name;
   };
+
+  if (defaultSeasons.length <= 1) {
+    return (
+      <div className={cn("inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-card text-foreground border border-border/80 shadow-xs font-bold text-xs select-none", className)}>
+        <Calendar className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+        <span className="font-extrabold tracking-tight">2026/2027</span>
+        {showBadge && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded-md bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+            <Globe className="w-2.5 h-2.5" />
+            <span>Hiện tại</span>
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={cn("relative inline-block text-left", className)} ref={dropdownRef}>

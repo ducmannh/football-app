@@ -321,38 +321,9 @@ export function PlayerDetailModal({
                     📊 Thống Kê Thi Đấu
                   </h3>
 
-                  {/* Season Toggle Switch */}
-                  <div className="flex items-center gap-1 bg-secondary/70 p-1 rounded-2xl border border-border/80 w-fit">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedSeason("2026/2027");
-                        setSelectedLeagueId("ALL");
-                      }}
-                      className={cn(
-                        "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer",
-                        selectedSeason === "2026/2027"
-                          ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xs"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      2026/2027 (Năm nay)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedSeason("2025/2026");
-                        setSelectedLeagueId("ALL");
-                      }}
-                      className={cn(
-                        "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer",
-                        selectedSeason === "2025/2026"
-                          ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xs"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      2025/2026 (Năm ngoái)
-                    </button>
+                  {/* Season Badge */}
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-xs font-bold w-fit">
+                    <span>Mùa 2026/2027 (Hiện tại)</span>
                   </div>
                 </div>
 

@@ -121,6 +121,44 @@ async function fetchStandingsFromDB(code: string, sName?: string): Promise<Stand
       (m) => m.homeTeamId === s.teamId || m.awayTeamId === s.teamId
     );
 
+    const teamHomeMatches = finishedMatches.filter((m) => m.homeTeamId === s.teamId);
+    const teamAwayMatches = finishedMatches.filter((m) => m.awayTeamId === s.teamId);
+
+    let homePlayed = teamHomeMatches.length;
+    let homeWon = teamHomeMatches.filter((m) => m.homeScore > m.awayScore).length;
+    let homeDraw = teamHomeMatches.filter((m) => m.homeScore === m.awayScore).length;
+    let homeLost = teamHomeMatches.filter((m) => m.homeScore < m.awayScore).length;
+    let homeGoalsFor = teamHomeMatches.reduce((acc, m) => acc + m.homeScore, 0);
+    let homeGoalsAgainst = teamHomeMatches.reduce((acc, m) => acc + m.awayScore, 0);
+    let homePoints = homeWon * 3 + homeDraw;
+
+    let awayPlayed = teamAwayMatches.length;
+    let awayWon = teamAwayMatches.filter((m) => m.awayScore > m.homeScore).length;
+    let awayDraw = teamAwayMatches.filter((m) => m.awayScore === m.homeScore).length;
+    let awayLost = teamAwayMatches.filter((m) => m.awayScore < m.homeScore).length;
+    let awayGoalsFor = teamAwayMatches.reduce((acc, m) => acc + m.awayScore, 0);
+    let awayGoalsAgainst = teamAwayMatches.reduce((acc, m) => acc + m.homeScore, 0);
+    let awayPoints = awayWon * 3 + awayDraw;
+
+    // Fallback if matches list is empty but standing has records
+    if (homePlayed === 0 && awayPlayed === 0 && s.played > 0) {
+      homePlayed = s.homePlayed || Math.ceil(s.played / 2);
+      homeWon = s.homeWon || Math.ceil(s.won / 2);
+      homeDraw = s.homeDraw || Math.ceil(s.draw / 2);
+      homeLost = s.homeLost || Math.ceil(s.lost / 2);
+      homeGoalsFor = s.homeGoalsFor || Math.ceil(s.goalsFor / 2);
+      homeGoalsAgainst = s.homeGoalsAgainst || Math.ceil(s.goalsAgainst / 2);
+      homePoints = s.homePoints || (homeWon * 3 + homeDraw);
+
+      awayPlayed = s.awayPlayed || (s.played - homePlayed);
+      awayWon = s.awayWon || (s.won - homeWon);
+      awayDraw = s.awayDraw || (s.draw - homeDraw);
+      awayLost = s.awayLost || (s.lost - homeLost);
+      awayGoalsFor = s.awayGoalsFor || (s.goalsFor - homeGoalsFor);
+      awayGoalsAgainst = s.awayGoalsAgainst || (s.goalsAgainst - homeGoalsAgainst);
+      awayPoints = s.awayPoints || (awayWon * 3 + awayDraw);
+    }
+
     const recent5 = teamMatches.slice(-5);
 
     if (recent5.length > 0) {
@@ -171,6 +209,20 @@ async function fetchStandingsFromDB(code: string, sName?: string): Promise<Stand
 
       return {
         ...s,
+        homePlayed,
+        homeWon,
+        homeDraw,
+        homeLost,
+        homeGoalsFor,
+        homeGoalsAgainst,
+        homePoints,
+        awayPlayed,
+        awayWon,
+        awayDraw,
+        awayLost,
+        awayGoalsFor,
+        awayGoalsAgainst,
+        awayPoints,
         form: formDetails.map((f) => f.result).join(""),
         formDetails,
       };

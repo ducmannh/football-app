@@ -410,16 +410,21 @@ export function StatsHub({
                       <div className="w-6 h-6 rounded-full bg-slate-300 text-slate-800 text-xs font-black flex items-center justify-center mb-2 shadow-xs">
                         2
                       </div>
-                      <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-slate-300 shadow-md bg-white mb-2 group-hover:scale-105 transition-transform">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={top2Player.player.avatar || "/placeholder.png"}
-                          alt={top2Player.player.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = "none";
-                          }}
-                        />
+                      <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-slate-300 shadow-md bg-gradient-to-br from-slate-800 to-slate-950 mb-2 group-hover:scale-105 transition-transform flex items-center justify-center">
+                        <span className="text-xs sm:text-sm font-black text-slate-300 font-mono select-none pointer-events-none">
+                          #{top2Player.player.number || top2Player.player.name.slice(0, 2).toUpperCase()}
+                        </span>
+                        {top2Player.player.avatar && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={top2Player.player.avatar}
+                            alt={top2Player.player.name}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = "none";
+                            }}
+                          />
+                        )}
                       </div>
                       <h3 className="font-extrabold text-xs sm:text-sm text-foreground group-hover:text-emerald-500 transition-colors truncate max-w-full">
                         {top2Player.player.shortName || top2Player.player.name}
@@ -456,16 +461,21 @@ export function StatsHub({
                     <div className="w-7 h-7 rounded-full bg-amber-400 text-amber-950 text-xs font-black flex items-center justify-center mb-2 shadow-md animate-bounce">
                       👑 1
                     </div>
-                    <div className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden border-3 border-amber-400 shadow-xl bg-white mb-2 group-hover:scale-105 transition-transform">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={top1Player.player.avatar || "/placeholder.png"}
-                        alt={top1Player.player.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = "none";
-                        }}
-                      />
+                    <div className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden border-3 border-amber-400 shadow-xl bg-gradient-to-br from-amber-950 to-slate-950 mb-2 group-hover:scale-105 transition-transform flex items-center justify-center">
+                      <span className="text-sm sm:text-base font-black text-amber-400 font-mono select-none pointer-events-none">
+                        #{top1Player.player.number || top1Player.player.name.slice(0, 2).toUpperCase()}
+                      </span>
+                      {top1Player.player.avatar && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={top1Player.player.avatar}
+                          alt={top1Player.player.name}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = "none";
+                          }}
+                        />
+                      )}
                     </div>
                     <h3 className="font-black text-xs sm:text-base text-foreground group-hover:text-amber-500 transition-colors truncate max-w-full">
                       {top1Player.player.name}
@@ -505,16 +515,21 @@ export function StatsHub({
                       <div className="w-6 h-6 rounded-full bg-amber-700 text-amber-100 text-xs font-black flex items-center justify-center mb-2 shadow-xs">
                         3
                       </div>
-                      <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-amber-700/60 shadow-md bg-white mb-2 group-hover:scale-105 transition-transform">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={top3Player.player.avatar || "/placeholder.png"}
-                          alt={top3Player.player.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = "none";
-                          }}
-                        />
+                      <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-amber-700/60 shadow-md bg-gradient-to-br from-amber-950 to-slate-950 mb-2 group-hover:scale-105 transition-transform flex items-center justify-center">
+                        <span className="text-xs sm:text-sm font-black text-amber-500 font-mono select-none pointer-events-none">
+                          #{top3Player.player.number || top3Player.player.name.slice(0, 2).toUpperCase()}
+                        </span>
+                        {top3Player.player.avatar && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={top3Player.player.avatar}
+                            alt={top3Player.player.name}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = "none";
+                            }}
+                          />
+                        )}
                       </div>
                       <h3 className="font-extrabold text-xs sm:text-sm text-foreground group-hover:text-emerald-500 transition-colors truncate max-w-full">
                         {top3Player.player.shortName || top3Player.player.name}
@@ -730,16 +745,21 @@ export function StatsHub({
                             {/* Player */}
                             <td className="py-2.5 px-2">
                               <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden bg-white border border-border/80 flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={item.player.avatar || "/placeholder.png"}
-                                    alt={item.player.name}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      (e.target as HTMLElement).style.display = "none";
-                                    }}
-                                  />
+                                <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden bg-gradient-to-br from-emerald-950 to-secondary border border-border/80 flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform flex items-center justify-center">
+                                  <span className="text-[10px] font-black text-emerald-400 font-mono select-none pointer-events-none">
+                                    #{item.player.number || item.player.name.slice(0, 2).toUpperCase()}
+                                  </span>
+                                  {item.player.avatar && (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={item.player.avatar}
+                                      alt={item.player.name}
+                                      className="absolute inset-0 w-full h-full object-cover"
+                                      onError={(e) => {
+                                        (e.target as HTMLElement).style.display = "none";
+                                      }}
+                                    />
+                                  )}
                                 </div>
                                 <div className="truncate">
                                   <p className="font-bold text-foreground group-hover:text-emerald-500 transition-colors truncate">

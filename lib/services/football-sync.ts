@@ -1434,6 +1434,20 @@ export async function ingestAllSeasons(options?: {
     }
   }
 
+  // 5. Chuẩn hóa tên vòng đấu tự động cho toàn bộ giải đấu
+  try {
+    await standardizeAllMatchRounds();
+  } catch (errRounds) {
+    console.error(`Lỗi khi chuẩn hóa vòng đấu:`, errRounds);
+  }
+
+  // 6. Dọn dẹp cầu thủ ảo / trùng lặp
+  try {
+    await cleanupOrphanDummyPlayers();
+  } catch (errClean) {
+    console.error(`Lỗi khi dọn dẹp cầu thủ:`, errClean);
+  }
+
   // Revalidate Caches
   try {
     revalidateTag("leagues", "max");
@@ -1467,3 +1481,91 @@ export async function ingestAllSeasons(options?: {
     timestamp: new Date().toISOString(),
   };
 }
+
+/**
+ * Chuẩn hóa tên vòng đấu cho toàn bộ các giải đấu
+ */
+export async function standardizeAllMatchRounds() {
+  const leagues = [
+    { code: "PL", matchesPerRound: 10 },
+    { code: "PD", matchesPerRound: 10 },
+    { code: "SA", matchesPerRound: 10 },
+    { code: "BL1", matchesPerRound: 9 },
+    { code: "FL1", matchesPerRound: 9 },
+  ];
+
+  for (const l of leagues) {
+    const dbLeague = await prisma.league.findUnique({ where: { code: l.code } });
+    if (!dbLeague) continue;
+
+    const matches = await prisma.match.findMany({
+      where: { leagueId: dbLeague.id },
+      orderBy: { matchDate: "asc" },
+    });
+
+    for (let i = 0; i < matches.length; i++) {
+      const roundNum = Math.floor(i / l.matchesPerRound) + 1;
+      const roundName = `Vòng ${roundNum}`;
+      if (matches[i].round !== roundName) {
+        await prisma.match.update({
+          where: { id: matches[i].id },
+          data: { round: roundName },
+        });
+      }
+    }
+  }
+
+  const cups = [
+    { code: "CL", matchesPerRound: 18 },
+    { code: "EL", matchesPerRound: 18 },
+    { code: "ECL", matchesPerRound: 18 },
+  ];
+
+  for (const c of cups) {
+    const dbCup = await prisma.league.findUnique({ where: { code: c.code } });
+    if (!dbCup) continue;
+
+    const matches = await prisma.match.findMany({
+      where: { leagueId: dbCup.id },
+      orderBy: { matchDate: "asc" },
+    });
+
+    for (let i = 0; i < matches.length; i++) {
+      const matchday = Math.floor(i / c.matchesPerRound) + 1;
+      const roundName = `Vòng bảng - Lượt ${matchday}`;
+      if (matches[i].round !== roundName) {
+        await prisma.match.update({
+          where: { id: matches[i].id },
+          data: { round: roundName },
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Dọn dẹp cầu thủ ảo / không hợp lệ
+ */
+export async function cleanupOrphanDummyPlayers() {
+  const dummyPlayers = await prisma.player.findMany({
+    where: {
+      OR: [
+        { name: { contains: "#•" } },
+        { marketValue: { contains: "€35M" }, avatar: null },
+      ],
+    },
+    include: {
+      events: true,
+      assists: true,
+      lineups: true,
+      stats: true,
+    },
+  });
+
+  for (const dp of dummyPlayers) {
+    if (dp.events.length === 0 && dp.assists.length === 0 && dp.lineups.length === 0 && dp.stats.length === 0) {
+      await prisma.player.delete({ where: { id: dp.id } });
+    }
+  }
+}
+

@@ -31,11 +31,13 @@ export function PlayerDetailModal({
   const [selectedSeason, setSelectedSeason] = useState<string>("2026/2027");
   const [selectedLeagueId, setSelectedLeagueId] = useState<string>("ALL");
   const [espnStats, setEspnStats] = useState<EspnAthleteStatsResponse | null>(null);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     if (!playerId) return;
 
     let isMounted = true;
+    setImgError(false);
 
     async function loadPlayer() {
       try {
@@ -183,25 +185,26 @@ export function PlayerDetailModal({
             <div className="relative bg-gradient-to-b from-emerald-950/40 via-card/90 to-card p-4 sm:p-6 border-b border-border/60">
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 text-center sm:text-left pr-8 sm:pr-12">
                 {/* Player Photo with Jersey Number Tag */}
-                <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl sm:rounded-3xl bg-secondary/80 p-1 border border-border flex items-center justify-center flex-shrink-0 shadow-xl overflow-hidden group">
-                  {player.avatar ? (
+                <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-emerald-950/80 via-secondary to-card p-1 border border-border flex items-center justify-center flex-shrink-0 shadow-xl overflow-hidden group">
+                  {/* Luxury Monogram / Number Fallback */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/80 font-black select-none pointer-events-none">
+                    <span className="text-2xl sm:text-3xl font-black text-emerald-400/90 font-mono tracking-tighter">
+                      {player.number ? `#${player.number}` : player.name.split(" ").map((w) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
+                    </span>
+                  </div>
+
+                  {player.avatar && !imgError && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={player.avatar}
                       alt={player.name}
-                      className="w-full h-full object-cover rounded-xl sm:rounded-2xl"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = "none";
-                      }}
+                      className="relative z-10 w-full h-full object-cover rounded-xl sm:rounded-2xl"
+                      onError={() => setImgError(true)}
                     />
-                  ) : (
-                    <span className="font-black text-2xl text-muted-foreground">
-                      #{player.number || "•"}
-                    </span>
                   )}
 
                   {player.number && (
-                    <div className="absolute bottom-1 right-1 bg-emerald-500 text-white font-mono font-black text-[11px] sm:text-xs px-2 py-0.5 rounded-lg shadow-md">
+                    <div className="absolute bottom-1 right-1 z-20 bg-emerald-500 text-white font-mono font-black text-[11px] sm:text-xs px-2 py-0.5 rounded-lg shadow-md">
                       #{player.number}
                     </div>
                   )}

@@ -151,9 +151,60 @@ export function FullFixturesHub({
     return groups;
   }, [leagueData.matches]);
 
+  // Sắp xếp các vòng đấu theo ngữ cảnh:
+  // - Nếu là tab "Đã đá" (FINISHED): Đảo ngược lại để vòng mới nhất đã đấu hiển thị trên cùng (Vòng 4, Vòng 3, Vòng 2, Vòng 1...)
+  // - Nếu là các tab khác ("Tất cả", "Sắp đá"): Giữ nguyên thứ tự tăng dần từ vòng 1..38
+  const displayGroupedEntries = useMemo(() => {
+    let entries = Object.entries(groupedMatches);
+
+    if (selectedStatus === "FINISHED") {
+      entries.sort(([roundA, matchesA], [roundB, matchesB]) => {
+        const isRoundA = roundA.startsWith("Vòng ");
+        const isRoundB = roundB.startsWith("Vòng ");
+        if (isRoundA && isRoundB) {
+          const numA = parseInt(roundA.replace(/\D/g, ""), 10);
+          const numB = parseInt(roundB.replace(/\D/g, ""), 10);
+          if (!isNaN(numA) && !isNaN(numB)) {
+            return numB - numA; // Vòng lớn hơn (mới hơn) đứng trước
+          }
+        }
+
+        // So sánh theo ngày diễn ra gần nhất của vòng
+        const maxTimeA = Math.max(...matchesA.map((m) => new Date(m.matchDate).getTime()), 0);
+        const maxTimeB = Math.max(...matchesB.map((m) => new Date(m.matchDate).getTime()), 0);
+        return maxTimeB - maxTimeA;
+      });
+
+      // Trong từng vòng của tab Đã đá, trận kết thúc mới nhất cũng xếp lên đầu
+      return entries.map(([roundName, matches]) => [
+        roundName,
+        [...matches].sort((a, b) => new Date(b.matchDate).getTime() - new Date(a.matchDate).getTime()),
+      ] as [string, MatchItem[]]);
+    }
+
+    return entries;
+  }, [groupedMatches, selectedStatus]);
+
+  // Danh sách vòng đấu hiển thị trong dropdown bộ lọc
+  const displayDropdownRounds = useMemo(() => {
+    if (selectedStatus === "FINISHED") {
+      return [...leagueData.rounds].reverse();
+    }
+    return leagueData.rounds;
+  }, [leagueData.rounds, selectedStatus]);
+
   // Find currently active / nearest upcoming round
   const currentActiveRound = useMemo(() => {
     if (!leagueData.rounds || leagueData.rounds.length === 0) return null;
+    if (selectedStatus === "FINISHED") {
+      // Khi ở tab Đã đá, vòng nổi bật là vòng vừa kết thúc gần nhất
+      const finishedRounds = leagueData.rounds.filter((r) =>
+        leagueData.matches.some((m) => m.round === r && m.status === "FINISHED")
+      );
+      if (finishedRounds.length > 0) {
+        return finishedRounds[finishedRounds.length - 1];
+      }
+    }
     // Look for first round with LIVE matches, or first round with SCHEDULED matches
     for (const r of leagueData.rounds) {
       const matchesInRound = leagueData.matches.filter((m) => m.round === r);
@@ -162,7 +213,7 @@ export function FullFixturesHub({
       }
     }
     return leagueData.rounds[0] || null;
-  }, [leagueData.rounds, leagueData.matches]);
+  }, [leagueData.rounds, leagueData.matches, selectedStatus]);
 
   // Jump to round
   const jumpToRound = (roundName: string) => {
@@ -458,7 +509,9 @@ export function FullFixturesHub({
                       >
                         <div className="flex items-center gap-2">
                           <Flame className="w-3.5 h-3.5 animate-bounce" />
-                          <span>Vòng hiện tại ({currentActiveRound})</span>
+                          <span>
+                            {selectedStatus === "FINISHED" ? "Vòng vừa đá gần nhất" : "Vòng hiện tại"} ({currentActiveRound})
+                          </span>
                         </div>
                         <span className="text-[10px] text-amber-600 dark:text-amber-400 font-mono">Xem ngay →</span>
                       </button>
@@ -489,7 +542,7 @@ export function FullFixturesHub({
 
                       {/* Grid of rounds */}
                       <div className="grid grid-cols-2 gap-1.5 pt-1">
-                        {leagueData.rounds.map((r) => {
+                        {displayDropdownRounds.map((r) => {
                           const isSelected = selectedRound === r;
                           const isCurrent = currentActiveRound === r;
                           return (
@@ -555,7 +608,7 @@ export function FullFixturesHub({
           <RefreshCw className="w-8 h-8 animate-spin text-emerald-500" />
           <p className="text-sm font-semibold">Đang tải toàn bộ lịch thi đấu {currentLeagueObj.shortName}...</p>
         </div>
-      ) : Object.keys(groupedMatches).length === 0 ? (
+      ) : displayGroupedEntries.length === 0 ? (
         <div className="py-20 text-center bg-card/60 border border-border/70 rounded-3xl p-8 backdrop-blur-xl">
           <div className="w-14 h-14 rounded-2xl bg-secondary mx-auto flex items-center justify-center text-muted-foreground mb-3">
             <Trophy className="w-7 h-7" />
@@ -567,7 +620,7 @@ export function FullFixturesHub({
         </div>
       ) : (
         <div className="space-y-8">
-          {Object.entries(groupedMatches).map(([roundName, roundMatches]) => {
+          {displayGroupedEntries.map(([roundName, roundMatches]) => {
             const dateRange = formatRoundDateRange(roundMatches);
             const finishedInRound = roundMatches.filter((m) => m.status === "FINISHED").length;
 

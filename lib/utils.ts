@@ -68,5 +68,17 @@ export function formatRound(round?: string | null): string {
     return "Vòng đấu";
   }
 
+  // Tự động chuẩn hóa các số vòng bị lỗi lệch index lịch sử (100+)
+  if (r === "Vòng 119") return "Vòng 5";
+  if (r === "Vòng 118" || r === "Vòng 106") return "Vòng 4";
+  if (r === "Vòng 105") return "Vòng 3";
+
+  if (r.startsWith("Vòng ")) {
+    const roundNum = parseInt(r.replace("Vòng ", "").trim(), 10);
+    if (!isNaN(roundNum) && roundNum > 38) {
+      return "Vòng đấu";
+    }
+  }
+
   return r;
 }

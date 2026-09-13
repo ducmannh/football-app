@@ -257,6 +257,28 @@ export async function getMatches(params?: {
       },
     });
 
+    // Tự động phát hiện và sửa lỗi nếu database vẫn còn lưu số vòng bị lỗi lệch (Vòng 119, 118, 106,...)
+    const hasCorruptedRounds = matches.some(
+      (m) => m.round && (m.round === "Vòng 119" || m.round === "Vòng 118" || m.round === "Vòng 106" || m.round === "Vòng 105")
+    );
+
+    if (hasCorruptedRounds) {
+      try {
+        await prisma.$executeRawUnsafe(`
+          UPDATE matches SET round = 'Vòng 5' WHERE round = 'Vòng 119';
+          UPDATE matches SET round = 'Vòng 4' WHERE round IN ('Vòng 118', 'Vòng 106');
+          UPDATE matches SET round = 'Vòng 3' WHERE round = 'Vòng 105';
+        `);
+      } catch (e) {
+        console.warn("Auto-heal round query error:", e);
+      }
+      for (const m of matches) {
+        if (m.round === "Vòng 119") m.round = "Vòng 5";
+        else if (m.round === "Vòng 118" || m.round === "Vòng 106") m.round = "Vòng 4";
+        else if (m.round === "Vòng 105") m.round = "Vòng 3";
+      }
+    }
+
     return matches;
   } catch (error) {
     console.error("Error fetching matches:", error);

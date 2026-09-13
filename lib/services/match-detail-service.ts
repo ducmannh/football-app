@@ -261,13 +261,29 @@ export async function fetchAndSyncLiveMatchDetail(matchId: string) {
         const rawText = (ke.text || ke.shortText || "").toLowerCase();
 
         let type: EventType = EventType.GOAL;
-        if (rawText.includes("own goal") || typeText.includes("own goal")) type = EventType.OWN_GOAL;
-        else if (rawText.includes("penalty") || typeText.includes("penalty")) type = EventType.PENALTY_SCORED;
-        else if (typeText.includes("goal")) type = EventType.GOAL;
-        else if (typeText.includes("yellow")) type = EventType.YELLOW_CARD;
-        else if (typeText.includes("red")) type = EventType.RED_CARD;
-        else if (typeText.includes("sub") || typeText.includes("substitution")) type = EventType.SUBSTITUTION;
-        else continue;
+        if (rawText.includes("own goal") || typeText.includes("own goal") || rawText.includes("phản lưới")) {
+          type = EventType.OWN_GOAL;
+        } else if (rawText.includes("penalty") || typeText.includes("penalty") || rawText.includes("phạt đền")) {
+          const isMissed =
+            rawText.includes("miss") ||
+            rawText.includes("saved") ||
+            typeText.includes("miss") ||
+            typeText.includes("saved") ||
+            rawText.includes("hỏng") ||
+            rawText.includes("trượt") ||
+            ke.scoringPlay === false;
+          type = isMissed ? EventType.PENALTY_MISSED : EventType.PENALTY_SCORED;
+        } else if (typeText.includes("goal") || rawText.includes("goal!")) {
+          type = EventType.GOAL;
+        } else if (typeText.includes("yellow")) {
+          type = EventType.YELLOW_CARD;
+        } else if (typeText.includes("red") || rawText.includes("red card") || rawText.includes("second yellow card")) {
+          type = EventType.RED_CARD;
+        } else if (typeText.includes("sub") || typeText.includes("substitution")) {
+          type = EventType.SUBSTITUTION;
+        } else {
+          continue;
+        }
 
         // Minute calculation (hỗ trợ phút bù giờ 45'+3', 90'+5', v.v...)
         let minute = 1;

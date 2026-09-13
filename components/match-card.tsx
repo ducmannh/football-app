@@ -12,25 +12,40 @@ interface MatchCardProps {
   onSelectPlayer?: (playerId: string) => void;
 }
 
-function getScorerName(e: any): string {
+function getEventPlayerName(e: any): string {
   if (e.player?.name) return e.player.name;
   if (e.player?.shortName) return e.player.shortName;
   if (e.description) {
-    const ogMatch = e.description.match(/Own Goal by ([^,\.]+)/i);
-    if (ogMatch && ogMatch[1]) {
-      return ogMatch[1].trim();
-    }
-    const playerMatch = e.description.match(/([A-ZÀ-Ỹa-zà-ỹ\s\.\-'\u00C0-\u024F\u1E00-\u1EFF]+)\s*\([^\)]+\)/);
+    const raw = e.description;
+
+    // 1. Phản lưới nhà
+    const ogMatch = raw.match(/Own Goal by ([^,\.]+)/i);
+    if (ogMatch && ogMatch[1]) return ogMatch[1].trim();
+
+    // 2. Penalty trượt / bị cản phá: "Penalty saved. Enzo Le Fée (Sunderland)..."
+    const penMatch = raw.match(/Penalty (?:saved|missed)\.\s*([A-ZÀ-Ỹa-zà-ỹ\s\.\-'\u00C0-\u024F\u1E00-\u1EFF]+?)(?:\s*\(|\.|\,|$)/i);
+    if (penMatch && penMatch[1]) return penMatch[1].trim();
+
+    // 3. Thẻ vàng thứ hai (thẻ đỏ): "Second yellow card to Reinildo Mandava (Sunderland)"
+    const secYellow = raw.match(/Second yellow card to ([A-ZÀ-Ỹa-zà-ỹ\s\.\-'\u00C0-\u024F\u1E00-\u1EFF]+?)(?:\s*\(|\.|\,|$)/i);
+    if (secYellow && secYellow[1]) return secYellow[1].trim();
+
+    // 4. Thẻ đỏ trực tiếp: "João Gomes (Aston Villa) is shown the red card"
+    const redMatch = raw.match(/([A-ZÀ-Ỹa-zà-ỹ\s\.\-'\u00C0-\u024F\u1E00-\u1EFF]+?)\s*\([^\)]+\)\s*is shown the red card/i);
+    if (redMatch && redMatch[1]) return redMatch[1].trim();
+
+    // 5. Cầu thủ (Đội bóng)
+    const playerMatch = raw.match(/([A-ZÀ-Ỹa-zà-ỹ\s\.\-'\u00C0-\u024F\u1E00-\u1EFF]+)\s*\([^\)]+\)/);
     if (playerMatch && playerMatch[1]) {
-      const raw = playerMatch[1].replace(/Goal!|Substitution,|Yellow Card|Red Card/gi, "").trim();
-      const parts = raw.split(".");
+      const clean = playerMatch[1].replace(/Goal!|Substitution,|Yellow Card|Red Card/gi, "").trim();
+      const parts = clean.split(".");
       const candidate = (parts[parts.length - 1] || "").trim();
       if (candidate.length > 2 && candidate.length < 35 && !candidate.toLowerCase().includes("half begins")) {
         return candidate;
       }
     }
   }
-  return "Bàn thắng";
+  return "Cầu thủ";
 }
 
 function getAssistName(e: any): string | null {
@@ -77,6 +92,33 @@ function OwnGoalIcon({ className = "w-3 h-3" }: { className?: string }) {
   );
 }
 
+function RedCardIcon({ className = "w-2.5 h-3.5" }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-block bg-rose-600 border border-rose-700/90 rounded-[2px] shadow-xs shrink-0 select-none",
+        className
+      )}
+      title="Thẻ đỏ"
+    />
+  );
+}
+
+function MissedPenaltyIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "relative inline-flex items-center justify-center shrink-0 select-none text-[11px] leading-none",
+        className
+      )}
+      title="Đá hỏng Penalty"
+    >
+      <span className="opacity-75">⚽</span>
+      <span className="absolute -top-0.5 -right-0.5 text-[9.5px] font-black text-rose-500 leading-none drop-shadow-xs">✕</span>
+    </span>
+  );
+}
+
 function normalizeTeamText(s: string) {
   return s
     .toLowerCase()
@@ -86,9 +128,48 @@ function normalizeTeamText(s: string) {
     .trim();
 }
 
+function getEventTeamSide(e: any, match: MatchItem): "home" | "away" {
+  if (e.teamId) {
+    if (e.teamId === match.homeTeamId) return "home";
+    if (e.teamId === match.awayTeamId) return "away";
+  }
+  if (e.player?.teamId) {
+    if (e.player.teamId === match.homeTeamId) return "home";
+    if (e.player.teamId === match.awayTeamId) return "away";
+  }
+  const rawDesc = e.description || "";
+  const desc = normalizeTeamText(rawDesc);
+  const homeName = normalizeTeamText(match.homeTeam.name);
+  const awayName = normalizeTeamText(match.awayTeam.name);
+  const homeShort = normalizeTeamText(match.homeTeam.shortName || "");
+  const awayShort = normalizeTeamText(match.awayTeam.shortName || "");
+
+  if ((homeName && desc.includes(homeName)) || (homeShort && desc.includes(homeShort))) return "home";
+  if ((awayName && desc.includes(awayName)) || (awayShort && desc.includes(awayShort))) return "away";
+
+  return "home";
+}
+
 function getGoalBeneficiary(e: any, match: MatchItem): "home" | "away" | null {
   const rawDesc = e.description || "";
   const desc = normalizeTeamText(rawDesc);
+
+  // Thẻ phạt, thay người hoặc hỏng penalty tuyệt đối không tính là bàn thắng
+  if (e.type === "RED_CARD" || e.type === "YELLOW_CARD" || e.type === "SUBSTITUTION") {
+    return null;
+  }
+
+  const isMissed =
+    e.type === "PENALTY_MISSED" ||
+    (desc.includes("penalty") && (
+      desc.includes("saved") ||
+      desc.includes("missed") ||
+      desc.includes("hong") ||
+      desc.includes("truot") ||
+      desc.includes("hỏng") ||
+      desc.includes("trượt")
+    ));
+  if (isMissed) return null;
 
   const isOG =
     e.type === "OWN_GOAL" ||
@@ -111,11 +192,11 @@ function getGoalBeneficiary(e: any, match: MatchItem): "home" | "away" | null {
   const awayShort = normalizeTeamText(match.awayTeam.shortName || "");
 
   if (isOG) {
-    // 1. If match ended with one team scoring 0, then only the other team can have goals!
+    // 1. Nếu một đội có tỉ số = 0, bàn thắng chắc chắn thuộc về đội còn lại
     if (match.awayScore === 0 && match.homeScore > 0) return "home";
     if (match.homeScore === 0 && match.awayScore > 0) return "away";
 
-    // 2. Parse Committer team from "Own Goal by <Player>, <Team>." or "<Player> (<Team>) Own Goal"
+    // 2. Xác định đội phạm lỗi phản lưới từ chuỗi mô tả
     const m1 = rawDesc.match(/own goal by [^,\.\(]+(?:,\s*|\s*\()([^,\.\)]+)/i);
     const m2 = rawDesc.match(/([^\(\)]+)\s*\(([^,\.\)]+)\)\s*own goal/i);
     const committerRaw = m1?.[1] || m2?.[2];
@@ -131,20 +212,20 @@ function getGoalBeneficiary(e: any, match: MatchItem): "home" | "away" | null {
       if (isCommitterAway && !isCommitterHome) return "home";
     }
 
-    // 3. Check player's team in database if available
+    // 3. Tra cứu đội của cầu thủ phản lưới
     if (e.player?.teamId) {
       if (e.player.teamId === match.homeTeamId) return "away";
       if (e.player.teamId === match.awayTeamId) return "home";
     }
 
-    // 4. Default: If event.teamId was set to awayTeamId, OG goes to home
+    // 4. Default: Nếu e.teamId là awayTeamId thì bàn thắng cho home
     if (e.teamId === match.awayTeamId) return "home";
     if (e.teamId === match.homeTeamId) return "away";
 
     return "home";
   }
 
-  // Regular Goal / Penalty
+  // Bàn thắng thường / Penalty thành công
   if (e.teamId === match.homeTeamId) return "home";
   if (e.teamId === match.awayTeamId) return "away";
 
@@ -152,6 +233,155 @@ function getGoalBeneficiary(e: any, match: MatchItem): "home" | "away" | null {
   if (desc.includes(`(${awayName})`) || (awayShort && desc.includes(`(${awayShort})`))) return "away";
 
   return null;
+}
+
+export type MatchCardEventKind = "GOAL" | "PENALTY_SCORED" | "OWN_GOAL" | "PENALTY_MISSED" | "RED_CARD";
+
+export interface MatchCardEvent {
+  id: string;
+  kind: MatchCardEventKind;
+  minute: number;
+  extraMinute?: number | null;
+  side: "home" | "away";
+  playerName: string;
+  assistName?: string | null;
+}
+
+function extractKeyEvents(match: MatchItem): { homeEvents: MatchCardEvent[]; awayEvents: MatchCardEvent[] } {
+  if (!match.events || match.events.length === 0) {
+    return { homeEvents: [], awayEvents: [] };
+  }
+
+  const homeEvents: MatchCardEvent[] = [];
+  const awayEvents: MatchCardEvent[] = [];
+
+  for (const e of match.events) {
+    const rawDesc = e.description || "";
+    const desc = rawDesc.toLowerCase();
+
+    // 1. Thẻ đỏ (Red Card)
+    const isRed =
+      e.type === "RED_CARD" ||
+      desc.includes("red card") ||
+      desc.includes("second yellow card") ||
+      desc.includes("thẻ đỏ");
+
+    if (isRed) {
+      const side = getEventTeamSide(e, match);
+      const item: MatchCardEvent = {
+        id: e.id,
+        kind: "RED_CARD",
+        minute: e.minute,
+        extraMinute: e.extraMinute,
+        side,
+        playerName: getEventPlayerName(e),
+      };
+      if (side === "home") homeEvents.push(item);
+      else awayEvents.push(item);
+      continue;
+    }
+
+    // 2. Đá hỏng penalty (Missed Penalty)
+    const isMissedPen =
+      e.type === "PENALTY_MISSED" ||
+      (desc.includes("penalty") && (
+        desc.includes("saved") ||
+        desc.includes("missed") ||
+        desc.includes("hong") ||
+        desc.includes("truot") ||
+        desc.includes("hỏng") ||
+        desc.includes("trượt")
+      ));
+
+    if (isMissedPen) {
+      const side = getEventTeamSide(e, match);
+      const item: MatchCardEvent = {
+        id: e.id,
+        kind: "PENALTY_MISSED",
+        minute: e.minute,
+        extraMinute: e.extraMinute,
+        side,
+        playerName: getEventPlayerName(e),
+      };
+      if (side === "home") homeEvents.push(item);
+      else awayEvents.push(item);
+      continue;
+    }
+
+    // 3. Phản lưới nhà (Own Goal)
+    const isOG =
+      e.type === "OWN_GOAL" ||
+      desc.includes("own goal") ||
+      desc.includes("phan luoi") ||
+      desc.includes("phản lưới") ||
+      desc.includes("(og)") ||
+      desc.includes(" og");
+
+    if (isOG) {
+      const beneficiary = getGoalBeneficiary(e, match);
+      if (beneficiary) {
+        const item: MatchCardEvent = {
+          id: e.id,
+          kind: "OWN_GOAL",
+          minute: e.minute,
+          extraMinute: e.extraMinute,
+          side: beneficiary,
+          playerName: getEventPlayerName(e),
+        };
+        if (beneficiary === "home") homeEvents.push(item);
+        else awayEvents.push(item);
+      }
+      continue;
+    }
+
+    // 4. Bàn thắng Penalty (Penalty Scored)
+    const isPenScored =
+      e.type === "PENALTY_SCORED" ||
+      (desc.includes("penalty") && (desc.includes("converts") || desc.includes("goal") || desc.includes("scored")));
+
+    if (isPenScored) {
+      const beneficiary = getGoalBeneficiary(e, match);
+      if (beneficiary) {
+        const item: MatchCardEvent = {
+          id: e.id,
+          kind: "PENALTY_SCORED",
+          minute: e.minute,
+          extraMinute: e.extraMinute,
+          side: beneficiary,
+          playerName: getEventPlayerName(e),
+        };
+        if (beneficiary === "home") homeEvents.push(item);
+        else awayEvents.push(item);
+      }
+      continue;
+    }
+
+    // 5. Bàn thắng thường (Regular Goal)
+    const isGoal = e.type === "GOAL" || desc.includes("goal!");
+    if (isGoal) {
+      const beneficiary = getGoalBeneficiary(e, match);
+      if (beneficiary) {
+        const item: MatchCardEvent = {
+          id: e.id,
+          kind: "GOAL",
+          minute: e.minute,
+          extraMinute: e.extraMinute,
+          side: beneficiary,
+          playerName: getEventPlayerName(e),
+          assistName: getAssistName(e),
+        };
+        if (beneficiary === "home") homeEvents.push(item);
+        else awayEvents.push(item);
+      }
+      continue;
+    }
+  }
+
+  // Sắp xếp theo phút tăng dần
+  homeEvents.sort((a, b) => a.minute - b.minute);
+  awayEvents.sort((a, b) => a.minute - b.minute);
+
+  return { homeEvents, awayEvents };
 }
 
 export function MatchCard({
@@ -170,11 +400,9 @@ export function MatchCard({
     minute: "2-digit",
   });
 
-  // Tách biệt danh sách ghi bàn chính xác: 1 bàn thắng chỉ thuộc về DUY NHẤT 1 bên
-  const homeGoals = match.events?.filter((e) => getGoalBeneficiary(e, match) === "home") || [];
-  const awayGoals = match.events?.filter((e) => getGoalBeneficiary(e, match) === "away") || [];
-
-  const hasGoals = homeGoals.length > 0 || awayGoals.length > 0;
+  // Danh sách sự kiện nổi bật (Bàn thắng, Thẻ đỏ, Penalty trượt)
+  const { homeEvents, awayEvents } = extractKeyEvents(match);
+  const hasKeyEvents = homeEvents.length > 0 || awayEvents.length > 0;
 
   return (
     <div
@@ -379,38 +607,41 @@ export function MatchCard({
         </div>
       </div>
 
-      {/* Goal Scorers Row (Hiển thị mỗi cầu thủ ghi bàn thành một dòng riêng biệt) */}
-      {hasGoals && (
+      {/* Key Events Row: Bàn thắng, Thẻ đỏ, Penalty trượt */}
+      {hasKeyEvents && (
         <div className="mt-2.5 pt-2 sm:mt-3 sm:pt-2.5 border-t border-border/40 flex items-start justify-between gap-1.5 sm:gap-3 text-[10px] sm:text-[11px] text-muted-foreground">
-          {/* Home Scorers (Căn phải dưới tên Đội nhà - mỗi bàn thắng 1 dòng) */}
+          {/* Home Events (Căn phải dưới tên Đội nhà) */}
           <div className="flex-1 flex flex-col items-end gap-1 text-right min-w-0">
-            {homeGoals.map((e) => {
-              const name = getScorerName(e);
-              const isPen =
-                e.type === "PENALTY_SCORED" ||
-                (e.description && (e.description.toLowerCase().includes("penalty") || e.description.toLowerCase().includes("phạt đền")));
-              const isOG =
-                e.type === "OWN_GOAL" ||
-                (e.description && (e.description.toLowerCase().includes("own goal") || e.description.toLowerCase().includes("phản lưới")));
-              const tag = isPen ? " (P)" : isOG ? " (OG)" : "";
-
-              const assistName = !isOG && !isPen ? getAssistName(e) : null;
+            {homeEvents.map((e) => {
               const minText = formatEventMinute(e.minute, e.extraMinute);
-
               return (
                 <div
                   key={e.id}
-                  className="flex items-center gap-1 justify-end font-medium leading-tight text-foreground/90"
+                  className="flex items-center gap-1.5 justify-end font-medium leading-tight text-foreground/90 max-w-full"
                 >
-                  <span className={cn("break-words", isOG && "text-rose-500 font-semibold")}>
-                    {name} {minText}{tag}
-                    {assistName && (
+                  <span
+                    className={cn(
+                      "break-words",
+                      e.kind === "OWN_GOAL" && "text-rose-500 font-semibold",
+                      e.kind === "RED_CARD" && "text-rose-500 dark:text-rose-400 font-semibold",
+                      e.kind === "PENALTY_MISSED" && "text-amber-500 dark:text-amber-400 font-semibold"
+                    )}
+                  >
+                    {e.playerName} {minText}
+                    {e.kind === "PENALTY_SCORED" && " (P)"}
+                    {e.kind === "OWN_GOAL" && " (OG)"}
+                    {e.kind === "PENALTY_MISSED" && " (Hỏng Pen)"}
+                    {e.assistName && (
                       <span className="text-[9.5px] text-muted-foreground/80 font-normal">
-                        {" "}({assistName})
+                        {" "}({e.assistName})
                       </span>
                     )}
                   </span>
-                  {isOG ? (
+                  {e.kind === "RED_CARD" ? (
+                    <RedCardIcon />
+                  ) : e.kind === "PENALTY_MISSED" ? (
+                    <MissedPenaltyIcon />
+                  ) : e.kind === "OWN_GOAL" ? (
                     <OwnGoalIcon className="w-3 h-3 flex-shrink-0" />
                   ) : (
                     <span className="text-[10px] sm:text-xs flex-shrink-0">⚽</span>
@@ -427,35 +658,39 @@ export function MatchCard({
             </span>
           </div>
 
-          {/* Away Scorers (Căn trái dưới tên Đội khách - mỗi bàn thắng 1 dòng) */}
+          {/* Away Events (Căn trái dưới tên Đội khách) */}
           <div className="flex-1 flex flex-col items-start gap-1 text-left min-w-0">
-            {awayGoals.map((e) => {
-              const name = getScorerName(e);
-              const isPen =
-                e.type === "PENALTY_SCORED" ||
-                (e.description && (e.description.toLowerCase().includes("penalty") || e.description.toLowerCase().includes("phạt đền")));
-              const isOG =
-                e.type === "OWN_GOAL" ||
-                (e.description && (e.description.toLowerCase().includes("own goal") || e.description.toLowerCase().includes("phản lưới")));
-              const tag = isPen ? " (P)" : isOG ? " (OG)" : "";
-              const assistName = !isOG && !isPen ? getAssistName(e) : null;
+            {awayEvents.map((e) => {
               const minText = formatEventMinute(e.minute, e.extraMinute);
-
               return (
                 <div
                   key={e.id}
-                  className="flex items-center gap-1 justify-start font-medium leading-tight text-foreground/90"
+                  className="flex items-center gap-1.5 justify-start font-medium leading-tight text-foreground/90 max-w-full"
                 >
-                  {isOG ? (
+                  {e.kind === "RED_CARD" ? (
+                    <RedCardIcon />
+                  ) : e.kind === "PENALTY_MISSED" ? (
+                    <MissedPenaltyIcon />
+                  ) : e.kind === "OWN_GOAL" ? (
                     <OwnGoalIcon className="w-3 h-3 flex-shrink-0" />
                   ) : (
                     <span className="text-[10px] sm:text-xs flex-shrink-0">⚽</span>
                   )}
-                  <span className={cn("break-words", isOG && "text-rose-500 font-semibold")}>
-                    {name} {minText}{tag}
-                    {assistName && (
+                  <span
+                    className={cn(
+                      "break-words",
+                      e.kind === "OWN_GOAL" && "text-rose-500 font-semibold",
+                      e.kind === "RED_CARD" && "text-rose-500 dark:text-rose-400 font-semibold",
+                      e.kind === "PENALTY_MISSED" && "text-amber-500 dark:text-amber-400 font-semibold"
+                    )}
+                  >
+                    {e.playerName} {minText}
+                    {e.kind === "PENALTY_SCORED" && " (P)"}
+                    {e.kind === "OWN_GOAL" && " (OG)"}
+                    {e.kind === "PENALTY_MISSED" && " (Hỏng Pen)"}
+                    {e.assistName && (
                       <span className="text-[9.5px] text-muted-foreground/80 font-normal">
-                        {" "}({assistName})
+                        {" "}({e.assistName})
                       </span>
                     )}
                   </span>

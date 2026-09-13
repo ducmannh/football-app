@@ -463,17 +463,30 @@ export function MatchDetailModal({
                       const homeShort = (match.homeTeam.shortName || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
                       const awayShort = (match.awayTeam.shortName || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
+                      const isMissedPen =
+                        event.type === "PENALTY_MISSED" ||
+                        (desc.includes("penalty") && (
+                          desc.includes("saved") ||
+                          desc.includes("missed") ||
+                          desc.includes("hong") ||
+                          desc.includes("truot") ||
+                          desc.includes("hỏng") ||
+                          desc.includes("trượt")
+                        ));
+
                       const isPen =
-                        event.type === "PENALTY_SCORED" ||
-                        desc.includes("penalty") ||
-                        desc.includes("phat den") ||
-                        desc.includes("converts the penalty");
+                        !isMissedPen &&
+                        (event.type === "PENALTY_SCORED" ||
+                          desc.includes("converts the penalty") ||
+                          (desc.includes("penalty") && (desc.includes("goal") || desc.includes("scored"))));
+
                       const isOG =
-                        event.type === "OWN_GOAL" ||
-                        desc.includes("own goal") ||
-                        desc.includes("phan luoi") ||
-                        desc.includes("(og)") ||
-                        desc.includes(" og");
+                        !isMissedPen &&
+                        (event.type === "OWN_GOAL" ||
+                          desc.includes("own goal") ||
+                          desc.includes("phan luoi") ||
+                          desc.includes("(og)") ||
+                          desc.includes(" og"));
 
                       // Bàn phản lưới nhà (OG) được tính và hiển thị ở cột của đội hưởng lợi bàn thắng
                       let isHome = event.teamId === match.homeTeamId;
@@ -539,6 +552,11 @@ export function MatchDetailModal({
                               <div className="flex items-center gap-1">
                                 <OwnGoalIcon className="w-5 h-5" />
                               </div>
+                            ) : isMissedPen ? (
+                              <span className="relative inline-flex items-center justify-center w-5 h-5 text-base select-none" title="Đá hỏng Penalty">
+                                <span className="opacity-75">⚽</span>
+                                <span className="absolute -top-1 -right-1 text-xs font-black text-rose-500 leading-none">✕</span>
+                              </span>
                             ) : isPen ? (
                               "🎯"
                             ) : isGoal ? (
@@ -570,6 +588,12 @@ export function MatchDetailModal({
                               {isPen && (
                                 <span className="text-[11px] sm:text-xs font-bold text-amber-500">
                                   (P)
+                                </span>
+                              )}
+
+                              {isMissedPen && (
+                                <span className="text-[11px] sm:text-xs font-bold text-rose-500 dark:text-rose-400">
+                                  (Hỏng Pen)
                                 </span>
                               )}
 

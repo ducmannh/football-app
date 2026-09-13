@@ -392,18 +392,33 @@ export async function syncMatchEventsFromDetails(
   for (const d of details) {
     const typeText = (d.type?.text || "").toLowerCase();
 
+    const descText = (d.text || d.description || "").toLowerCase();
+
     let type: EventType = EventType.GOAL;
-    if (d.ownGoal === true || typeText.includes("own goal")) {
+    if (d.ownGoal === true || typeText.includes("own goal") || descText.includes("own goal") || descText.includes("phản lưới")) {
       type = EventType.OWN_GOAL;
-    } else if (d.penaltyKick === true || typeText.includes("penalty")) {
-      type = d.scoringPlay !== false ? EventType.PENALTY_SCORED : EventType.PENALTY_MISSED;
-    } else if (d.scoringPlay === true || typeText.includes("goal")) {
+    } else if (
+      d.penaltyKick === true ||
+      typeText.includes("penalty") ||
+      descText.includes("penalty") ||
+      descText.includes("phạt đền")
+    ) {
+      const isMissed =
+        d.scoringPlay === false ||
+        typeText.includes("miss") ||
+        typeText.includes("saved") ||
+        descText.includes("missed") ||
+        descText.includes("saved") ||
+        descText.includes("hỏng") ||
+        descText.includes("trượt");
+      type = isMissed ? EventType.PENALTY_MISSED : EventType.PENALTY_SCORED;
+    } else if (d.scoringPlay === true || typeText.includes("goal") || descText.includes("goal!")) {
       type = EventType.GOAL;
-    } else if (d.redCard === true || typeText.includes("red")) {
+    } else if (d.redCard === true || typeText.includes("red") || descText.includes("red card") || descText.includes("second yellow card")) {
       type = EventType.RED_CARD;
-    } else if (d.yellowCard === true || typeText.includes("yellow")) {
+    } else if (d.yellowCard === true || typeText.includes("yellow") || descText.includes("yellow card")) {
       type = EventType.YELLOW_CARD;
-    } else if (typeText.includes("sub") || typeText.includes("substitution")) {
+    } else if (typeText.includes("sub") || typeText.includes("substitution") || descText.includes("substitution")) {
       type = EventType.SUBSTITUTION;
     } else {
       continue;
@@ -536,15 +551,23 @@ export async function syncMatchKeyEventsFromSummary(
     const rawText = (ke.text || ke.shortText || "").toLowerCase();
 
     let type: EventType = EventType.GOAL;
-    if (rawText.includes("own goal") || typeText.includes("own goal")) {
+    if (rawText.includes("own goal") || typeText.includes("own goal") || rawText.includes("phản lưới")) {
       type = EventType.OWN_GOAL;
-    } else if (rawText.includes("penalty") || typeText.includes("penalty")) {
-      type = EventType.PENALTY_SCORED;
-    } else if (typeText.includes("goal")) {
+    } else if (rawText.includes("penalty") || typeText.includes("penalty") || rawText.includes("phạt đền")) {
+      const isMissed =
+        rawText.includes("miss") ||
+        rawText.includes("saved") ||
+        typeText.includes("miss") ||
+        typeText.includes("saved") ||
+        rawText.includes("hỏng") ||
+        rawText.includes("trượt") ||
+        ke.scoringPlay === false;
+      type = isMissed ? EventType.PENALTY_MISSED : EventType.PENALTY_SCORED;
+    } else if (typeText.includes("goal") || rawText.includes("goal!")) {
       type = EventType.GOAL;
     } else if (typeText.includes("yellow")) {
       type = EventType.YELLOW_CARD;
-    } else if (typeText.includes("red")) {
+    } else if (typeText.includes("red") || rawText.includes("red card") || rawText.includes("second yellow card")) {
       type = EventType.RED_CARD;
     } else if (typeText.includes("sub") || typeText.includes("substitution")) {
       type = EventType.SUBSTITUTION;

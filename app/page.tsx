@@ -118,14 +118,25 @@ export default function HomePage() {
     );
   });
 
-  // Group filtered matches by League
+  // Group filtered matches by League (Tự động loại bỏ các trận trùng lặp)
   const matchesByLeague = filteredMatches.reduce(
     (acc: Record<string, MatchItem[]>, match) => {
       const leagueCode = match.league.code;
       if (!acc[leagueCode]) {
         acc[leagueCode] = [];
       }
-      acc[leagueCode].push(match);
+      
+      // Kiểm tra trùng lặp theo ID hoặc cùng cặp đấu (home + away) trong cùng 1 ngày
+      const isDuplicate = acc[leagueCode].some((m) => {
+        if (m.id === match.id) return true;
+        const sameTeams = m.homeTeamId === match.homeTeamId && m.awayTeamId === match.awayTeamId;
+        const sameDay = new Date(m.matchDate).toDateString() === new Date(match.matchDate).toDateString();
+        return sameTeams && sameDay;
+      });
+
+      if (!isDuplicate) {
+        acc[leagueCode].push(match);
+      }
       return acc;
     },
     {}

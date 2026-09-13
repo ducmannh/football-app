@@ -1427,14 +1427,17 @@ export async function ingestAllSeasons(options?: {
           const awayPenaltyScore = hasShootout ? Number(awayComp.shootoutScore) : null;
           const extraTimeStatus = (hasShootout || isPenDesc) ? "PEN" : isAET ? "AET" : null;
 
-          // Tránh nhân đôi trận đấu
+          // Tránh nhân đôi trận đấu (tìm kiếm trong khoảng +/- 2 ngày)
           const existingMatch = await prisma.match.findFirst({
             where: {
               leagueId: leagueMap[l.code].id,
               seasonId: seasonObj.id,
               homeTeamId,
               awayTeamId,
-              matchDate,
+              matchDate: {
+                gte: new Date(matchDate.getTime() - 2 * 86400 * 1000),
+                lte: new Date(matchDate.getTime() + 2 * 86400 * 1000),
+              },
             },
           });
 
@@ -1677,12 +1680,17 @@ export async function ingestAllSeasons(options?: {
  * Chuẩn hóa tên vòng đấu cho toàn bộ các giải đấu
  */
 export async function standardizeAllMatchRounds() {
+  const currentSeason = await prisma.season.findFirst({
+    where: { isCurrent: true },
+  });
+  if (!currentSeason) return;
+
   const leagues = [
-    { code: "PL", matchesPerRound: 10 },
-    { code: "PD", matchesPerRound: 10 },
-    { code: "SA", matchesPerRound: 10 },
-    { code: "BL1", matchesPerRound: 9 },
-    { code: "FL1", matchesPerRound: 9 },
+    { code: "PL", matchesPerRound: 10, maxRounds: 38 },
+    { code: "PD", matchesPerRound: 10, maxRounds: 38 },
+    { code: "SA", matchesPerRound: 10, maxRounds: 38 },
+    { code: "BL1", matchesPerRound: 9, maxRounds: 34 },
+    { code: "FL1", matchesPerRound: 9, maxRounds: 34 },
   ];
 
   for (const l of leagues) {
@@ -1690,12 +1698,12 @@ export async function standardizeAllMatchRounds() {
     if (!dbLeague) continue;
 
     const matches = await prisma.match.findMany({
-      where: { leagueId: dbLeague.id },
+      where: { leagueId: dbLeague.id, seasonId: currentSeason.id },
       orderBy: { matchDate: "asc" },
     });
 
     for (let i = 0; i < matches.length; i++) {
-      const roundNum = Math.floor(i / l.matchesPerRound) + 1;
+      const roundNum = Math.min(l.maxRounds, Math.floor(i / l.matchesPerRound) + 1);
       const roundName = `Vòng ${roundNum}`;
       if (matches[i].round !== roundName) {
         await prisma.match.update({
@@ -1707,9 +1715,9 @@ export async function standardizeAllMatchRounds() {
   }
 
   const cups = [
-    { code: "CL", matchesPerRound: 18 },
-    { code: "EL", matchesPerRound: 18 },
-    { code: "ECL", matchesPerRound: 18 },
+    { code: "CL", matchesPerRound: 18, maxMatchdays: 8 },
+    { code: "EL", matchesPerRound: 18, maxMatchdays: 8 },
+    { code: "ECL", matchesPerRound: 18, maxMatchdays: 6 },
   ];
 
   for (const c of cups) {
@@ -1717,12 +1725,12 @@ export async function standardizeAllMatchRounds() {
     if (!dbCup) continue;
 
     const matches = await prisma.match.findMany({
-      where: { leagueId: dbCup.id },
+      where: { leagueId: dbCup.id, seasonId: currentSeason.id },
       orderBy: { matchDate: "asc" },
     });
 
     for (let i = 0; i < matches.length; i++) {
-      const matchday = Math.floor(i / c.matchesPerRound) + 1;
+      const matchday = Math.min(c.maxMatchdays, Math.floor(i / c.matchesPerRound) + 1);
       const roundName = `Vòng bảng - Lượt ${matchday}`;
       if (matches[i].round !== roundName) {
         await prisma.match.update({

@@ -311,14 +311,24 @@ export function MatchCard({
                 let htHome = match.homeHalfTimeScore;
                 let htAway = match.awayHalfTimeScore;
 
-                // Fallback tính toán HT từ danh sách sự kiện bàn thắng nếu chưa được lưu
-                if ((htHome === null || htAway === null) && !isScheduled && match.events && match.events.length > 0) {
-                  htHome = match.events.filter(
+                // Nếu có sự kiện bàn thắng thực tế trong trận, tính toán tỷ số hiệp 1 chính xác (phút <= 45)
+                if (!isScheduled && match.events && match.events.length > 0) {
+                  const calculatedHome = match.events.filter(
                     (e) => (getGoalBeneficiary(e, match) === "home") && e.minute <= 45
                   ).length;
-                  htAway = match.events.filter(
+                  const calculatedAway = match.events.filter(
                     (e) => (getGoalBeneficiary(e, match) === "away") && e.minute <= 45
                   ).length;
+
+                  // Ưu tiên tính từ events nếu htHome/Away chưa có hoặc đang là 0-0 nhưng thực tế hiệp 1 có bàn thắng
+                  if (
+                    htHome === null ||
+                    htAway === null ||
+                    (htHome === 0 && htAway === 0 && (calculatedHome > 0 || calculatedAway > 0))
+                  ) {
+                    htHome = calculatedHome;
+                    htAway = calculatedAway;
+                  }
                 }
 
                 if (htHome != null && htAway != null && !isScheduled && match.homePenaltyScore === null) {

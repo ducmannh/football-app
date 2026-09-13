@@ -262,9 +262,27 @@ export function MatchDetailModal({
                         let htHome = match.homeHalfTimeScore;
                         let htAway = match.awayHalfTimeScore;
 
-                        if ((htHome === null || htAway === null) && match.events && match.events.length > 0) {
-                          htHome = match.events.filter((e) => e.teamId === match.homeTeamId && (e.type === "GOAL" || e.type === "PENALTY_SCORED" || e.type === "OWN_GOAL") && e.minute <= 45).length;
-                          htAway = match.events.filter((e) => e.teamId === match.awayTeamId && (e.type === "GOAL" || e.type === "PENALTY_SCORED" || e.type === "OWN_GOAL") && e.minute <= 45).length;
+                        if (match.events && match.events.length > 0) {
+                          const calcHome = match.events.filter((e) => {
+                            if (e.minute > 45) return false;
+                            if (e.type === "OWN_GOAL") return e.teamId === match.awayTeamId;
+                            return (e.type === "GOAL" || e.type === "PENALTY_SCORED") && e.teamId === match.homeTeamId;
+                          }).length;
+
+                          const calcAway = match.events.filter((e) => {
+                            if (e.minute > 45) return false;
+                            if (e.type === "OWN_GOAL") return e.teamId === match.homeTeamId;
+                            return (e.type === "GOAL" || e.type === "PENALTY_SCORED") && e.teamId === match.awayTeamId;
+                          }).length;
+
+                          if (
+                            htHome === null ||
+                            htAway === null ||
+                            (htHome === 0 && htAway === 0 && (calcHome > 0 || calcAway > 0))
+                          ) {
+                            htHome = calcHome;
+                            htAway = calcAway;
+                          }
                         }
 
                         if (htHome != null && htAway != null && match.homePenaltyScore === null) {

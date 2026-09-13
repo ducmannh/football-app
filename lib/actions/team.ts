@@ -5,7 +5,13 @@ import { TeamDetailData, MatchItem, StandingItem, Player } from "@/types/footbal
 
 export async function getTeamById(teamId: string): Promise<TeamDetailData | null> {
   try {
-    const team = await prisma.team.findUnique({
+    const currentSeason =
+      (await prisma.season.findFirst({ where: { isCurrent: true } })) ||
+      (await prisma.season.findFirst({ orderBy: { startDate: "desc" } }));
+
+    if (!currentSeason) return null;
+
+    let team = await prisma.team.findUnique({
       where: { id: teamId },
       include: {
         league: true,
@@ -17,7 +23,7 @@ export async function getTeamById(teamId: string): Promise<TeamDetailData | null
         },
         standings: {
           where: {
-            season: { name: "2026/2027" },
+            seasonId: currentSeason.id,
           },
           include: {
             team: true,
@@ -30,10 +36,39 @@ export async function getTeamById(teamId: string): Promise<TeamDetailData | null
 
     if (!team) return null;
 
-    // Lấy tất cả các trận đấu trong mùa giải liên quan đến CLB này
+    // Tự động nạp/cập nhật đội hình mới nhất từ ESPN nếu danh sách hiện tại còn trống (< 15 cầu thủ)
+    if (team.players.length < 15) {
+      try {
+        const { syncTeamRosterFromEspn } = await import("@/lib/services/team-roster-sync");
+        const res = await syncTeamRosterFromEspn(team.id);
+        if (res.success && res.count > 0) {
+          const freshPlayers = await prisma.player.findMany({
+            where: { teamId: team.id },
+            orderBy: [{ position: "asc" }, { number: "asc" }],
+          });
+          team = { ...team, players: freshPlayers };
+        }
+      } catch (e) {
+        console.warn(`Auto roster sync error for ${team.name}:`, e);
+      }
+    }
+
+    // CHỈ LẤY CÁC TRẬN ĐẤU CỦA CLB TRONG MÙA GIẢI HIỆN TẠI (2026/2027)
+    // Loại bỏ triệt để các trận của các mùa giải cũ (2023, 2024, 2025)
     const matchesRaw = await prisma.match.findMany({
       where: {
-        OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+        OR: [
+          { seasonId: currentSeason.id },
+          {
+            matchDate: {
+              gte: currentSeason.startDate,
+              lte: currentSeason.endDate,
+            },
+          },
+        ],
+        AND: [
+          { OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }] },
+        ],
       },
       include: {
         league: true,
@@ -51,10 +86,15 @@ export async function getTeamById(teamId: string): Promise<TeamDetailData | null
 
     const rawMatchesList = matchesRaw as unknown as MatchItem[];
 
-    // Chuẩn hóa tên vòng đấu theo từng giải đấu cho CLB này:
-    // Với giải VĐQG: trận thứ k trong mùa của CLB luôn là "Vòng k"
-    // Với Cúp Châu Âu: trận thứ k là "Vòng bảng - Lượt k"
+    // Chuẩn hóa tên vòng đấu cho mùa giải hiện tại:
+    // Với giải VĐQG: vòng đấu 1..38
+    // Với Cúp Châu Âu: Vòng bảng - Lượt 1..8
     const matches = rawMatchesList.map((m) => {
+      // Nếu đã có round chuẩn (Vòng 1..38 hoặc Vòng bảng - Lượt 1..8) thì giữ nguyên
+      if (m.round && !m.round.match(/Vòng [4-9]\d|Vòng [1-9]\d{2}/)) {
+        return m;
+      }
+
       if (m.league?.type === "LEAGUE" || m.leagueId === team.leagueId) {
         const sameLeagueMatches = rawMatchesList
           .filter((x) => x.leagueId === m.leagueId)
@@ -226,7 +266,7 @@ export async function getTeamById(teamId: string): Promise<TeamDetailData | null
         standings: team.standings as unknown as StandingItem[],
       },
       matches,
-      seasonName: "2026/2027",
+      seasonName: currentSeason.name,
       competitionStats,
       stats: {
         totalMatches,

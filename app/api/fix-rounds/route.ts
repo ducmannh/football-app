@@ -1,11 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const logs: string[] = [];
+    const url = new URL(request.url);
+    const syncRosters = url.searchParams.get("syncRosters") === "true";
 
     // 1. Tìm mùa giải hiện tại
     const currentSeason =
@@ -179,11 +181,43 @@ export async function GET() {
       GROUP BY round
     `);
 
+    // 7. Đồng bộ đội hình mới nhất từ ESPN cho các CLB
+    let syncedRostersCount = 0;
+    if (syncRosters) {
+      const allTopTeams = await prisma.team.findMany({
+        where: {
+          league: {
+            code: { in: ["PL", "PD", "SA", "BL1", "FL1"] },
+          },
+        },
+        select: { id: true, name: true },
+      });
+
+      const { syncTeamRosterFromEspn } = await import("@/lib/services/team-roster-sync");
+      // Chạy song song từng nhóm 5 CLB để vừa nhanh vừa không quá tải API
+      const chunkSize = 5;
+      for (let i = 0; i < allTopTeams.length; i += chunkSize) {
+        const chunk = allTopTeams.slice(i, i + chunkSize);
+        await Promise.all(
+          chunk.map(async (t) => {
+            try {
+              const r = await syncTeamRosterFromEspn(t.id, true);
+              if (r.success) syncedRostersCount++;
+            } catch {
+              // ignore
+            }
+          })
+        );
+      }
+      logs.push(`Đã đồng bộ đội hình mới nhất cho ${syncedRostersCount}/${allTopTeams.length} CLB từ ESPN.`);
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Đã dọn dẹp sạch trận trùng lặp và chuẩn hóa toàn bộ vòng đấu thành công!",
+      message: "Đã dọn dẹp sạch trận trùng lặp, chuẩn hóa toàn bộ vòng đấu và sẵn sàng đồng bộ đội hình!",
       deletedMatchesCount,
       totalRoundsUpdated,
+      syncedRostersCount,
       leagueSummaries,
       remainingHighRounds,
       logs,
@@ -195,6 +229,6 @@ export async function GET() {
   }
 }
 
-export async function POST() {
-  return GET();
+export async function POST(request: NextRequest) {
+  return GET(request);
 }

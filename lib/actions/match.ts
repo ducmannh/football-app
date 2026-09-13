@@ -334,6 +334,13 @@ export async function getFullLeagueFixtures(params: {
 
     if (!league) return { league: null, rounds: [], matches: [], teams: [], totalMatches: 0, finishedCount: 0, scheduledCount: 0, liveCount: 0, totalGoals: 0 };
 
+    // Giới hạn số vòng đấu chuẩn của giải
+    const maxRoundsForLeague =
+      league.code === "BL1" || league.code === "FL1" ? 34 :
+      league.code === "CL" || league.code === "EL" ? 8 :
+      league.code === "ECL" ? 6 :
+      (league.code === "PL" || league.code === "PD" || league.code === "SA" ? 38 : 50);
+
     // 1. Fetch all rounds in chronological order
     const allRoundsRaw = await prisma.match.findMany({
       where: {
@@ -345,13 +352,28 @@ export async function getFullLeagueFixtures(params: {
     });
 
     const seenRounds = new Set<string>();
-    const rounds: string[] = [];
     for (const m of allRoundsRaw) {
-      if (m.round && !seenRounds.has(m.round)) {
+      if (m.round) {
+        // Lọc bỏ các vòng bất thường có số vòng > maxRoundsForLeague hoặc hàng trăm
+        if (m.round.startsWith("Vòng ")) {
+          const num = parseInt(m.round.replace("Vòng ", "").trim(), 10);
+          if (!isNaN(num) && num > maxRoundsForLeague) continue;
+        }
         seenRounds.add(m.round);
-        rounds.push(m.round);
       }
     }
+
+    // Sắp xếp các vòng đấu theo đúng thứ tự số học (Vòng 1, Vòng 2, ... Vòng 38)
+    const rounds: string[] = Array.from(seenRounds).sort((a, b) => {
+      const isRoundA = a.startsWith("Vòng ");
+      const isRoundB = b.startsWith("Vòng ");
+      if (isRoundA && isRoundB) {
+        const numA = parseInt(a.replace(/\D/g, ""), 10);
+        const numB = parseInt(b.replace(/\D/g, ""), 10);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      }
+      return a.localeCompare(b);
+    });
 
     // 2. Build where filter for matches
     const where: Prisma.MatchWhereInput = {
@@ -396,17 +418,36 @@ export async function getFullLeagueFixtures(params: {
       },
     });
 
-    // 3. Stats for banner
+    // Chuẩn hóa tại chỗ nếu có trận nào mang số vòng > maxRoundsForLeague
+    for (const m of matches) {
+      if (m.round && m.round.startsWith("Vòng ")) {
+        const num = parseInt(m.round.replace("Vòng ", "").trim(), 10);
+        if (!isNaN(num) && num > maxRoundsForLeague) {
+          m.round = `Vòng ${maxRoundsForLeague}`;
+        }
+      }
+    }
+
+    // 3. Stats for banner (Deduplicate nếu có bản ghi trùng lặp)
     const allLeagueMatches = await prisma.match.findMany({
       where: { leagueId: league.id, seasonId: season.id },
-      select: { status: true, homeScore: true, awayScore: true },
+      select: { id: true, homeTeamId: true, awayTeamId: true, status: true, homeScore: true, awayScore: true },
     });
 
-    const totalMatches = allLeagueMatches.length;
-    const finishedCount = allLeagueMatches.filter((m) => m.status === "FINISHED").length;
-    const liveCount = allLeagueMatches.filter((m) => m.status === "LIVE").length;
-    const scheduledCount = allLeagueMatches.filter((m) => m.status === "SCHEDULED").length;
-    const totalGoals = allLeagueMatches.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
+    const uniqueMatchesMap = new Map<string, typeof allLeagueMatches[0]>();
+    for (const m of allLeagueMatches) {
+      const key = `${m.homeTeamId}-${m.awayTeamId}`;
+      if (!uniqueMatchesMap.has(key) || m.status === "FINISHED") {
+        uniqueMatchesMap.set(key, m);
+      }
+    }
+    const cleanLeagueMatches = Array.from(uniqueMatchesMap.values());
+
+    const totalMatches = cleanLeagueMatches.length;
+    const finishedCount = cleanLeagueMatches.filter((m) => m.status === "FINISHED").length;
+    const liveCount = cleanLeagueMatches.filter((m) => m.status === "LIVE").length;
+    const scheduledCount = cleanLeagueMatches.filter((m) => m.status === "SCHEDULED").length;
+    const totalGoals = cleanLeagueMatches.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
 
     // 4. Teams in league
     const teams = await prisma.team.findMany({
